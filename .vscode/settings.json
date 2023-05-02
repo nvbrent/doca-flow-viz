@@ -1,0 +1,7 @@
+{
+    "C_Cpp.default.compileCommands": "build/vscode_compile_commands.json",
+    "files.associations": {
+        "dlfcn.h": "c",
+        "optional": "cpp"
+    }
+}
