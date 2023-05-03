@@ -2,104 +2,153 @@
 #include <map>
 #include <mutex>
 #include <thread>
-#include <vector>
 
 #include <doca_flow.h>
+#include <counter_spy_c.h>
 #include <counter_spy.h>
 
-using EntryPtr = const struct doca_flow_pipe_entry*;
-using PipePtr = const struct doca_flow_pipe*;
+#include <counter_spy.pb.h>
+#include <counter_spy.grpc.pb.h>
 
-struct FlowStats
-{
-    bool valid;
-    EntryPtr entry_ptr;
-    uint32_t shared_counter_id;
-    struct doca_flow_query query;
-};
+std::map<const struct doca_flow_port *const, PortMon> ports;
 
-using FlowStatsList = std::vector<FlowStats>;
+EntryMon::EntryMon() = default;
 
-struct Entry
-{
-    EntryPtr entry_ptr;
-    struct doca_flow_monitor mon;
-
-    FlowStats
-    query_entry() const
-    {
-        FlowStats stats;
-        stats.entry_ptr = entry_ptr;
-        stats.shared_counter_id = 0;
-        auto res = doca_flow_query_entry(
-            const_cast<struct doca_flow_pipe_entry *>(entry_ptr), 
-            &stats.query);
-        stats.valid = res == DOCA_SUCCESS;
-        printf("Entry %p: valid: %d, pkts: %ld\n", entry_ptr, stats.valid, stats.query.total_pkts);
-        return stats;
+EntryMon::EntryMon(
+    const struct doca_flow_pipe_entry *entry_ptr, 
+    const struct doca_flow_monitor *entry_mon) : entry_ptr(entry_ptr)
+{ 
+    if (entry_mon) {
+        this->mon = *entry_mon; // copy
     }
-};
-
-struct Pipe
-{
-    std::string name;
-    PipePtr pipe;
-    struct doca_flow_pipe_attr attr;
-    struct doca_flow_monitor mon;
-    std::map<EntryPtr, Entry> entries;
-
-    FlowStatsList
-    query_entries() const
-    {
-        FlowStatsList result;
-        result.reserve(entries.size());
-
-        printf("Pipe %s\n", name.c_str());
-        for (const auto &entry : entries) {
-            auto stats = entry.second.query_entry();
-            if (stats.valid) {
-                result.emplace_back(stats);
-            }
-        }
-
-        return result;
-    }
-
-};
-
-using PortStats = std::map<std::string, FlowStatsList>;
-
-struct Port
-{
-    uint16_t port_id;
-    const struct doca_flow_port *port;
-    std::map<const PipePtr, Pipe> pipes;
-    mutable std::mutex mutex;
-
-    PortStats
-    query() const
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        printf("Port %d\n", port_id);
-        PortStats stats;
-        for (const auto &pipe : pipes) {
-            FlowStatsList entries = pipe.second.query_entries();
-            if (!entries.empty()) {
-                stats[pipe.second.name] = std::move(entries);
-            }
-        }
-        return stats;
-    }
-};
-
-std::map<const struct doca_flow_port *const, Port> ports;
-std::vector<std::mutex> port_mutex;
-
-static bool is_counter_active(const struct doca_flow_monitor *mon)
-{
-	return (mon->flags & DOCA_FLOW_MONITOR_COUNT) || mon->shared_counter_id;
 }
 
+FlowStats
+EntryMon::query_entry() const
+{
+    FlowStats stats;
+    stats.entry_ptr = entry_ptr;
+    stats.shared_counter_id = 0;
+    auto res = doca_flow_query_entry(
+        const_cast<struct doca_flow_pipe_entry *>(entry_ptr), 
+        &stats.query);
+    stats.valid = res == DOCA_SUCCESS;
+    printf("Entry %p: valid: %d, pkts: %ld\n", entry_ptr, stats.valid, stats.query.total_pkts);
+    return stats;
+}
+
+PipeMon::PipeMon() = default;
+
+PipeMon::PipeMon(
+    const doca_flow_pipe *pipe,
+    const doca_flow_pipe_attr &attr,
+    const doca_flow_monitor *pipe_mon) : 
+        attr_name(attr.name), 
+        pipe(pipe), 
+        attr(attr)
+{
+    if (pipe_mon) {
+        this->mon = *pipe_mon; // copy
+    }
+}
+
+std::string PipeMon::name() const
+{
+    return attr_name;
+}
+
+bool PipeMon::is_counter_active(const struct doca_flow_monitor *mon)
+{
+	return mon && (
+        (mon->flags & DOCA_FLOW_MONITOR_COUNT) || 
+        mon->shared_counter_id
+    );
+}
+
+FlowStatsList
+PipeMon::query_entries() const
+{
+    FlowStatsList result;
+    result.reserve(entries.size());
+
+    printf("Pipe %s\n", attr_name.c_str());
+    for (const auto &entry : entries) {
+        auto stats = entry.second.query_entry();
+        if (stats.valid) {
+            result.emplace_back(stats);
+        }
+    }
+
+    return result;
+}
+
+void PipeMon::entry_added(
+    const struct doca_flow_pipe *pipe, 
+    const struct doca_flow_monitor *entry_monitor, 
+    const struct doca_flow_pipe_entry *entry)
+{
+    if (is_counter_active(entry_monitor) ||
+        is_counter_active(&this->mon)) 
+    {
+        entries[entry] = EntryMon(entry, entry_monitor);
+    }
+}
+
+PortMon::PortMon() = default;
+
+PortMon::PortMon(
+    uint16_t port_id,
+    const struct doca_flow_port *port) :
+        port_id(port_id),
+        port(port)
+{
+}
+
+PortMon::~PortMon()
+{
+    port_flushed();
+}
+
+void PortMon::port_flushed()
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    pipes.clear();
+}
+
+PortStats
+PortMon::query() const
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    printf("Port %d\n", port_id);
+    PortStats stats;
+    for (const auto &pipe : pipes) {
+        FlowStatsList entries = pipe.second.query_entries();
+        if (!entries.empty()) {
+            stats[pipe.second.name()] = std::move(entries);
+        }
+    }
+    return stats;
+}
+
+void PortMon::pipe_created(
+    const struct doca_flow_pipe_cfg *cfg, 
+    const doca_flow_pipe *pipe)
+{
+    std::lock_guard<std::mutex> lock(mutex);
+    pipes[pipe] = PipeMon(pipe, cfg->attr, cfg->monitor);
+}
+
+std::mutex& PortMon::get_mutex() const
+{
+    return mutex;
+}
+
+PipeMon *PortMon::find_pipe(const doca_flow_pipe *pipe)
+{
+    auto pipe_counters_iter = pipes.find(pipe);
+    return (pipe_counters_iter == pipes.end()) ? nullptr : &pipe_counters_iter->second;
+
+}
 
 void counter_spy_svc_loop()
 {
@@ -125,7 +174,9 @@ void counter_spy_port_started(
     uint16_t port_id,
     const struct doca_flow_port * port)
 {
-    ports[port].port_id = port_id;
+    ports.emplace(std::piecewise_construct,
+        std::forward_as_tuple(port),
+        std::forward_as_tuple(port_id, port));
 }
 
 void counter_spy_port_stopped(
@@ -134,19 +185,18 @@ void counter_spy_port_stopped(
     ports.erase(port);
 }
 
+void counter_spy_port_flushed(
+    const struct doca_flow_port *port)
+{
+    ports[port].port_flushed();
+}
+
 void counter_spy_pipe_created(
     const struct doca_flow_pipe_cfg *cfg, 
     const doca_flow_pipe *pipe)
 {
     auto &port_counters = ports[cfg->port];
-    std::lock_guard<std::mutex> lock(port_counters.mutex);
-    auto &pipe_counters = port_counters.pipes[pipe];
-    pipe_counters.pipe = pipe;
-    pipe_counters.attr = cfg->attr; // copy
-    if (cfg->monitor) {
-        pipe_counters.mon = *cfg->monitor; // copy
-    }
-    pipe_counters.name = cfg->attr.name; // copy
+    port_counters.pipe_created(cfg, pipe);
 }
 
 void counter_spy_entry_added(
@@ -156,26 +206,14 @@ void counter_spy_entry_added(
 {
     for (auto &port_counters_iter : ports) {
         auto &port_counters = port_counters_iter.second;
-        std::lock_guard<std::mutex> lock(port_counters.mutex);
+        std::lock_guard<std::mutex> lock(port_counters.get_mutex());
 
-        auto pipe_counters_iter = port_counters.pipes.find(pipe);
-        if (pipe_counters_iter == port_counters.pipes.end()) {
+        auto pipe_counters = port_counters.find_pipe(pipe);
+        if (!pipe_counters) {
             continue; // pipe not found
         }
 
-        auto &pipe_counters = pipe_counters_iter->second;
-
-        bool counter_active_for_entry = monitor && is_counter_active(monitor);
-        bool counter_active_for_pipe = is_counter_active(&pipe_counters_iter->second.mon);
-        if (!counter_active_for_entry && !counter_active_for_pipe) {
-            continue; // counter not active
-        }
-
-        auto &entry_counters = pipe_counters.entries[entry];
-        entry_counters.entry_ptr = entry;
-        if (monitor) {
-            entry_counters.mon = *monitor; // copy
-        }
+        pipe_counters->entry_added(pipe, monitor, entry);
         break;
     }
 }

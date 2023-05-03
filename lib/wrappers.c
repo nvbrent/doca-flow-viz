@@ -1,6 +1,6 @@
 #include <doca_flow.h>
 #include <wrapper_decls.h>
-#include <counter_spy.h>
+#include <counter_spy_c.h>
 
 // Wrapper functions from doca_flow.h
 
@@ -40,6 +40,13 @@ doca_flow_port_stop(struct doca_flow_port *port)
 		counter_spy_port_stopped(port);
 	}
 	return res;
+}
+
+void
+doca_flow_port_pipes_flush(struct doca_flow_port *port)
+{
+	(*p_doca_flow_port_pipes_flush)(port);
+	counter_spy_port_flushed(port);
 }
 
 doca_error_t

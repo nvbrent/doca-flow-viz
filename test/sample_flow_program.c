@@ -59,6 +59,7 @@ flow_init(
 	struct doca_flow_cfg arp_sc_flow_cfg = {
 		.mode_args = "vnf,hws,isolated",
 		.queues = dpdk_config->port_config.nb_queues,
+        .queue_depth = 128,
 		.resource.nb_counters = 1024,
 	};
 	doca_error_t res = doca_flow_init(&arp_sc_flow_cfg);

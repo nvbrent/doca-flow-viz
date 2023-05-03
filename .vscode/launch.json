@@ -14,7 +14,7 @@
                 "-a17:00.1,dv_flow_en=2",
                 "-c0xf",
                 "--",
-                "-l", "60"
+                "-l", "40"
             ],
             "cwd": "${workspaceFolder}",
             "environment": [
