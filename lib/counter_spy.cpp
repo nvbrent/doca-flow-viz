@@ -146,7 +146,9 @@ void counter_spy_pipe_created(
     auto &pipe_counters = port_counters.pipes[pipe];
     pipe_counters.pipe = pipe;
     pipe_counters.attr = cfg->attr; // copy
-    pipe_counters.mon = *cfg->monitor; // copy
+    if (cfg->monitor) {
+        pipe_counters.mon = *cfg->monitor; // copy
+    }
     pipe_counters.name = cfg->attr.name; // copy
 }
 

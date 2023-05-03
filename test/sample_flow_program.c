@@ -101,6 +101,7 @@ void create_flows(
 {
     for (uint16_t i=0; i<num_ports; i++)
     {
+        doca_error_t res;
         struct doca_flow_match match = {};
         struct doca_flow_monitor mon = { .flags = DOCA_FLOW_MONITOR_COUNT };
         uint16_t rss_queues[] = { 0 };
@@ -116,20 +117,59 @@ void create_flows(
         };
         struct doca_flow_pipe *pipe = NULL;
 
-        doca_error_t res = doca_flow_pipe_create(&cfg, &fwd, &miss, &pipe);
+        res = doca_flow_pipe_create(&cfg, &fwd, &miss, &pipe);
         if (res != DOCA_SUCCESS) {
 		    DOCA_LOG_ERR("Failed to create Pipe: %s", doca_get_error_string(res));
         }
 
         for (int j=0; j<5; j++) {
             struct doca_flow_pipe_entry *entry = NULL;
-            doca_error_t res = doca_flow_pipe_add_entry(0, pipe, NULL, NULL, NULL, NULL, 0, NULL, &entry);
+            res = doca_flow_pipe_add_entry(0, pipe, NULL, NULL, NULL, NULL, 0, NULL, &entry);
         }
+
+        struct doca_flow_fwd fwd_next = { .type = DOCA_FLOW_FWD_PIPE, .next_pipe = pipe };
+        struct doca_flow_pipe_cfg cfg_next = {
+            .attr = {
+                .name = "NEXT_PIPE",
+            },
+            .port = ports[i],
+            .match = &match,
+            .monitor = &mon,
+        };
+        res = doca_flow_pipe_create(&cfg_next, &fwd_next, &miss, &pipe);
+        if (res != DOCA_SUCCESS) {
+		    DOCA_LOG_ERR("Failed to create Pipe: %s", doca_get_error_string(res));
+        }
+
+        for (int j=0; j<2; j++) {
+            struct doca_flow_pipe_entry *entry = NULL;
+            res = doca_flow_pipe_add_entry(0, pipe, NULL, NULL, NULL, NULL, 0, NULL, &entry);
+        }
+
+        struct doca_flow_pipe_cfg cfg_root = {
+            .attr = {
+                .name = "ROOT_PIPE",
+                .is_root = true,
+            },
+            .port = ports[i],
+            .match = &match,
+            .monitor = NULL, // "Counter action on root table is not supported in HW steering mode"
+        };
+        struct doca_flow_fwd fwd_root = { .type = DOCA_FLOW_FWD_PIPE, .next_pipe = pipe };
+        res = doca_flow_pipe_create(&cfg_root, &fwd_root, &miss, &pipe);
+        if (res != DOCA_SUCCESS) {
+		    DOCA_LOG_ERR("Failed to create Pipe: %s", doca_get_error_string(res));
+        }
+        struct doca_flow_pipe_entry *entry = NULL;
+        res = doca_flow_pipe_add_entry(0, pipe, NULL, NULL, NULL, NULL, 0, NULL, &entry);
     }
 }
 
 int main(int argc, char *argv[])
 {
+	struct doca_logger_backend *stdout_logger = NULL;
+	(void)doca_log_create_file_backend(stdout, &stdout_logger);
+
 	struct application_dpdk_config dpdk_config = {
 		.port_config.nb_ports = 2,
 		.port_config.nb_queues = 1,
