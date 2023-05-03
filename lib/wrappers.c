@@ -5,6 +5,23 @@
 // Wrapper functions from doca_flow.h
 
 doca_error_t
+doca_flow_init(const struct doca_flow_cfg *cfg)
+{
+	doca_error_t res = (*p_doca_flow_init)(cfg);
+	if (res == DOCA_SUCCESS) {
+		counter_spy_start_service();
+	}
+	return res;
+}
+
+void
+doca_flow_destroy(void)
+{
+	(*p_doca_flow_destroy)();
+	counter_spy_stop_service();
+}
+
+doca_error_t
 doca_flow_port_start(const struct doca_flow_port_cfg *cfg,
 		     struct doca_flow_port **port)
 {
@@ -25,11 +42,6 @@ doca_flow_port_stop(struct doca_flow_port *port)
 	return res;
 }
 
-bool is_counter_active(const struct doca_flow_monitor *mon)
-{
-	return (mon->flags & DOCA_FLOW_MONITOR_COUNT) || mon->shared_counter_id;
-}
-
 doca_error_t
 doca_flow_pipe_create(const struct doca_flow_pipe_cfg *cfg,
 		const struct doca_flow_fwd *fwd,
@@ -37,7 +49,7 @@ doca_flow_pipe_create(const struct doca_flow_pipe_cfg *cfg,
 		struct doca_flow_pipe **pipe)
 {
     doca_error_t res = (*p_doca_flow_pipe_create)(cfg, fwd, fwd_miss, pipe);
-	if (res == DOCA_SUCCESS && cfg && cfg->monitor && is_counter_active(cfg->monitor)) {
+	if (res == DOCA_SUCCESS) {
 		counter_spy_pipe_created(cfg, *pipe);
 	}
     return res;
@@ -57,7 +69,7 @@ doca_flow_pipe_add_entry(uint16_t pipe_queue,
     doca_error_t res = (*p_doca_flow_pipe_add_entry)(
         pipe_queue, pipe, match, actions, monitor, fwd, 
         flags, usr_ctx, entry);
-	if (res == DOCA_SUCCESS && monitor && is_counter_active(monitor)) {
+	if (res == DOCA_SUCCESS) {
 		counter_spy_entry_added(pipe, monitor, *entry);
 	}
 	return res;
@@ -78,7 +90,7 @@ doca_flow_pipe_control_add_entry(uint16_t pipe_queue,
     doca_error_t res = (*p_doca_flow_pipe_control_add_entry)(
         pipe_queue, priority, pipe, match, match_mask, 
 		actions, action_descs, monitor, fwd, entry);
-	if (res == DOCA_SUCCESS && monitor && is_counter_active(monitor)) {
+	if (res == DOCA_SUCCESS) {
 		counter_spy_entry_added(pipe, monitor, *entry);
 	}
 	return res;

@@ -6,17 +6,20 @@
     "configurations": [
         {
             "name": "gdb",
-            "program": "${workspaceFolder}/build/template-doca-app",
+            "program": "${workspaceFolder}/build/test/sample_flow_program",
             "request": "launch",
             "type": "cppdbg",
             "args": [
-                "-aXX:00.0,dv_flow_en=2",
-                "-aXX:00.1,dv_flow_en=2",
+                "-a17:00.0,dv_flow_en=2",
+                "-a17:00.1,dv_flow_en=2",
                 "-c0xf",
                 "--",
                 "-l", "60"
             ],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                { "name": "LD_PRELOAD", "value": "${workspaceFolder}/build/lib/libdoca-counter-spy.so"}
+            ]
         }
     ]
 }

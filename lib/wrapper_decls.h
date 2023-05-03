@@ -12,6 +12,8 @@
 #define DECL_PFUNC(func) COUNTER_SPY_EXTERN typeof(func) * p_ ## func
 
 // Functions to wrap:
+DECL_PFUNC(doca_flow_init);
+DECL_PFUNC(doca_flow_destroy);
 DECL_PFUNC(doca_flow_port_start);
 DECL_PFUNC(doca_flow_port_stop);
 DECL_PFUNC(doca_flow_pipe_create);

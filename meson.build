@@ -15,8 +15,6 @@ project('doca-counter-spy', 'C', 'CPP',
 	default_options: ['buildtype=debug']
 )
 
-APP_NAME = meson.project_name()
-
 cpp_args = ['-std=c++11']
 
 add_project_arguments('-D DOCA_ALLOW_EXPERIMENTAL_API', language: ['c','cpp'])
@@ -35,13 +33,5 @@ common_dir_path = '/opt/mellanox/doca/applications/common/src'
 
 app_inc_dirs = [include_directories(common_dir_path)]
 
-app_srcs = [
-	'wrappers.c',
-	'wrapper_init.c',
-	'counter_spy.cpp',
-]
-
-shared_library(APP_NAME, app_srcs,
-	cpp_args : cpp_args,
-	dependencies : app_dependencies,
-	include_directories : app_inc_dirs)
+subdir('lib')
+subdir('test')
