@@ -33,5 +33,7 @@ common_dir_path = '/opt/mellanox/doca/applications/common/src'
 
 app_inc_dirs = [include_directories(common_dir_path)]
 
+proto_files = files('protos/counter_spy.proto')
+
 subdir('lib')
 subdir('test')

@@ -7,9 +7,6 @@
 #include <doca_flow.h>
 #include <counter_spy.h>
 
-extern "C" void counter_spy_start_service(void);
-extern "C" void counter_spy_stop_service(void);
-
 using EntryPtr = const struct doca_flow_pipe_entry*;
 using PipePtr = const struct doca_flow_pipe*;
 
