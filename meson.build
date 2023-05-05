@@ -12,10 +12,10 @@
 
 project('doca-counter-spy', 'C', 'CPP',
 	version: '0.0.1',
-	default_options: ['buildtype=debug']
+	default_options: [
+		'buildtype=debug',
+		'cpp_std=c++17']
 )
-
-cpp_args = ['-std=c++11']
 
 add_project_arguments('-D DOCA_ALLOW_EXPERIMENTAL_API', language: ['c','cpp'])
 
@@ -29,9 +29,32 @@ app_dependencies += dependency('threads', required : true)
 app_dependencies += dependency('doca', required : true)
 app_dependencies += dependency('grpc', required : true)
 
-common_dir_path = '/opt/mellanox/doca/applications/common/src'
+protoc          = find_program('protoc', required : true)
+grpc_cpp_plugin = find_program('grpc_cpp_plugin')
 
-app_inc_dirs = [include_directories(common_dir_path)]
+dep_protobuf = dependency('protobuf', required : true)
+dep_grpc     = dependency('grpc++', required : true)
+
+protoc_gen = generator(protoc, \
+    output    : [
+        '@BASENAME@.pb.cc', 
+        '@BASENAME@.pb.h'],
+    arguments : [
+        '--proto_path=@SOURCE_ROOT@/protos', 
+        '--cpp_out=@BUILD_DIR@', 
+        '@INPUT@'])
+
+grpc_gen = generator(protoc, \
+    output    : [
+        '@BASENAME@.grpc.pb.cc', 
+        '@BASENAME@.grpc.pb.h'],
+    arguments : [
+        '--proto_path=@SOURCE_ROOT@/protos',
+        '--grpc_out=@BUILD_DIR@',
+        '--plugin=protoc-gen-grpc=' + grpc_cpp_plugin.full_path(),
+        '@INPUT@'])
+
+common_dir_path = '/opt/mellanox/doca/applications/common/src'
 
 proto_files = files('protos/counter_spy.proto')
 

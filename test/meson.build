@@ -5,7 +5,6 @@ test_exe = executable('sample_flow_program',
         common_dir_path + '/offload_rules.c',
         common_dir_path + '/utils.c',
     ],
-	cpp_args : cpp_args,
 	dependencies : app_dependencies,
 	include_directories : app_inc_dirs,
     install: false)

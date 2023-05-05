@@ -72,6 +72,8 @@ public:
         const struct doca_flow_port *port);
     ~PortMon();
 
+    uint16_t port_id() const;
+
     PortStats query() const;
 
     void pipe_created(
@@ -85,7 +87,7 @@ public:
     std::mutex& get_mutex() const;
 
 private:
-    uint16_t port_id;
+    uint16_t _port_id;
     const struct doca_flow_port *port;
     std::map<const PipePtr, PipeMon> pipes;
     mutable std::mutex mutex;
@@ -93,3 +95,4 @@ private:
 
 // globals
 extern std::map<const struct doca_flow_port *const, PortMon> ports;
+

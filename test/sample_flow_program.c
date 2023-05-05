@@ -202,8 +202,10 @@ int main(int argc, char *argv[])
 	}
 #endif
 	
-    printf("sleeping...\n");
-    sleep(3);
+    while (!force_quit) {
+        printf("sleeping...\n");
+        sleep(8);
+    }
 
 	flow_destroy(ports, dpdk_config.port_config.nb_ports);
 	doca_argp_destroy();

@@ -68,4 +68,5 @@ void init_logger(void)
 
 void close_logger(void)
 {
+    counter_spy_stop_service();
 }
