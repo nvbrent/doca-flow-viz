@@ -51,14 +51,14 @@ void load_wrappers(void)
     void * handle_doca_flow = log_dlopen(DOCA_FLOW_SO, RTLD_LAZY);
 
 #define INIT_PFUNC(func, lib_handle) p_ ## func = log_dlsym(lib_handle, #func)
-    INIT_PFUNC(doca_flow_init,             handle_doca_flow);
-    INIT_PFUNC(doca_flow_destroy,          handle_doca_flow);
-    INIT_PFUNC(doca_flow_port_start,       handle_doca_flow);
-    INIT_PFUNC(doca_flow_port_stop,        handle_doca_flow);
-    INIT_PFUNC(doca_flow_port_pipes_flush, handle_doca_flow);
-    INIT_PFUNC(doca_flow_pipe_create,      handle_doca_flow);
-    INIT_PFUNC(doca_flow_pipe_add_entry,   handle_doca_flow);
-
+    INIT_PFUNC(doca_flow_init,                   handle_doca_flow);
+    INIT_PFUNC(doca_flow_destroy,                handle_doca_flow);
+    INIT_PFUNC(doca_flow_port_start,             handle_doca_flow);
+    INIT_PFUNC(doca_flow_port_stop,              handle_doca_flow);
+    INIT_PFUNC(doca_flow_port_pipes_flush,       handle_doca_flow);
+    INIT_PFUNC(doca_flow_pipe_create,            handle_doca_flow);
+    INIT_PFUNC(doca_flow_pipe_add_entry,         handle_doca_flow);
+    INIT_PFUNC(doca_flow_pipe_control_add_entry, handle_doca_flow);
 }
 
 void init_logger(void)
