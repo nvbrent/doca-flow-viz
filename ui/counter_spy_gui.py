@@ -29,14 +29,14 @@ def rich_port_stats(port: Port):
         pipe_title += PortType.Name(pipe.type) + ")"
         pipe_tree = port_tree.add(pipe_title)
         entry_table = Table()
-        [entry_table.add_column(c) for c in ["Entry", "T.Pkts", "T.Bytes"]]
+        [entry_table.add_column(c) for c in ["Entry", "D.Pkts", "D.Bytes", "T.Pkts", "T.Bytes"]]
         for entry in pipe.entries:
-#            stats = entry.query()
             id = hex(entry.id)
             if len(id) > 16:
                 id = id[0:6] + "..." + id[-7:-1]
             entry_table.add_row(id, 
-                str(entry.packets), convert_size(entry.bytes))
+                str(entry.delta_packets), convert_size(entry.delta_bytes),
+                str(entry.total_packets), convert_size(entry.total_bytes))
         pipe_tree.add(entry_table)
     return port_tree
 

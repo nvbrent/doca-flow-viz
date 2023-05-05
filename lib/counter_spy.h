@@ -17,7 +17,8 @@ struct EntryFlowStats
     bool valid = false;
     EntryPtr entry_ptr = nullptr;
     uint32_t shared_counter_id = 0;
-    struct doca_flow_query query = {};
+    struct doca_flow_query total = {};
+    struct doca_flow_query delta = {};
 };
 using FlowStatsList = std::vector<EntryFlowStats>;
 
@@ -40,11 +41,12 @@ public:
     explicit EntryMon(
         const struct doca_flow_pipe_entry *entry_ptr, 
         const struct doca_flow_monitor *entry_mon);
-    EntryFlowStats query_entry() const;
+    EntryFlowStats query_entry();
 
 private:
     EntryPtr entry_ptr = nullptr;
     struct doca_flow_monitor mon = {};
+    struct doca_flow_query stats = {};
 };
 
 class PipeMon

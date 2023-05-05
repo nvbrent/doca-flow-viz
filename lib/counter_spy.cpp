@@ -24,15 +24,22 @@ EntryMon::EntryMon(
 }
 
 EntryFlowStats
-EntryMon::query_entry() const
+EntryMon::query_entry()
 {
+    auto prev_stats = this->stats;
     EntryFlowStats stats;
     stats.entry_ptr = entry_ptr;
     stats.shared_counter_id = 0;
     auto res = doca_flow_query_entry(
         const_cast<struct doca_flow_pipe_entry *>(entry_ptr), 
-        &stats.query);
+        &stats.total);
     stats.valid = res == DOCA_SUCCESS;
+    if (stats.valid) {
+        stats.delta.total_bytes = stats.total.total_bytes - prev_stats.total_bytes;
+        stats.delta.total_pkts = stats.total.total_pkts - prev_stats.total_pkts;
+        this->stats.total_bytes = stats.total.total_bytes;
+        this->stats.total_pkts = stats.total.total_pkts;
+    }
     //printf("Query: Entry %p: valid: %d, pkts: %ld\n", entry_ptr, stats.valid, stats.query.total_pkts);
     return stats;
 }
@@ -83,7 +90,7 @@ PipeMon::query_entries()
     result.pipe_stats.reserve(entries.size());
 
     //printf("Query: Pipe %s\n", attr_name.c_str());
-    for (const auto &entry : entries) {
+    for (auto &entry : entries) {
         auto stats = entry.second.query_entry();
         if (stats.valid) {
             result.pipe_stats.emplace_back(stats);
@@ -206,8 +213,10 @@ CounterSpyServiceImpl::getFlowCounts(
             for (auto &entry_iter : pipe_iter.second.pipe_stats) {
                 auto *entry_obj = pipe_obj->add_entries();
                 entry_obj->set_id((intptr_t)entry_iter.entry_ptr);
-                entry_obj->set_bytes(entry_iter.query.total_bytes);
-                entry_obj->set_packets(entry_iter.query.total_pkts);
+                entry_obj->set_total_bytes(entry_iter.total.total_bytes);
+                entry_obj->set_total_packets(entry_iter.total.total_pkts);
+                entry_obj->set_delta_bytes(entry_iter.delta.total_bytes);
+                entry_obj->set_delta_packets(entry_iter.delta.total_pkts);
             }
         }
     }

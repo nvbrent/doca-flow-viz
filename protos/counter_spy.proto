@@ -23,8 +23,10 @@ message EmptyRequest {}
 message Entry
 {
     uint64 id = 1;
-    uint64 packets = 2;
-    uint64 bytes = 3;
+    uint64 total_packets = 2;
+    uint64 total_bytes = 3;
+    uint64 delta_packets = 4;
+    uint64 delta_bytes = 5;
 }
 
 message Pipe
