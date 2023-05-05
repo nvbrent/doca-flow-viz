@@ -1,3 +1,4 @@
+import argparse
 import grpc
 import math
 
@@ -46,7 +47,15 @@ def show_rich_stats(result: QueryResult, stats_table : Table):
     
     stats_table.add_row(*[rich_port_stats(port) for port in result.ports])
 
-channel = grpc.insecure_channel("127.0.0.1:50051")
+parser = argparse.ArgumentParser(
+    prog='counter_spy_gui', 
+    description="Displays DOCA flow coutners in a remotely executing program wrapped with counter-spy")
+parser.add_argument('-r', '--remote', 
+    help="the remote address running counter-spy", 
+    default="127.0.0.1")
+args = parser.parse_args()
+
+channel = grpc.insecure_channel(args.remote + ":50051")
 stub = CounterSpyStub(channel)
 stats_table = Table(show_header=True)
 with Live(stats_table, refresh_per_second=4, screen=False) as live:
