@@ -8,15 +8,30 @@
 using EntryPtr = const struct doca_flow_pipe_entry*;
 using PipePtr = const struct doca_flow_pipe*;
 
-struct FlowStats
+class EntryMon;
+class PipeMon;
+class PortMon;
+
+struct EntryFlowStats
 {
     bool valid = false;
     EntryPtr entry_ptr = nullptr;
     uint32_t shared_counter_id = 0;
     struct doca_flow_query query = {};
 };
+using FlowStatsList = std::vector<EntryFlowStats>;
 
-using FlowStatsList = std::vector<FlowStats>;
+struct PipeStats
+{
+    PipeMon *pipe_mon;
+    FlowStatsList pipe_stats;
+};
+
+struct PortStats
+{
+    PortMon *port_mon;
+    std::map<std::string, PipeStats> port_stats;
+};
 
 class EntryMon
 {
@@ -25,7 +40,7 @@ public:
     explicit EntryMon(
         const struct doca_flow_pipe_entry *entry_ptr, 
         const struct doca_flow_monitor *entry_mon);
-    FlowStats query_entry() const;
+    EntryFlowStats query_entry() const;
 
 private:
     EntryPtr entry_ptr = nullptr;
@@ -41,9 +56,11 @@ public:
         const doca_flow_pipe_attr &attr,
         const doca_flow_monitor *mon);
 
-    FlowStatsList query_entries() const;
+    PipeStats query_entries();
 
     std::string name() const;
+    bool is_root() const;
+    doca_flow_pipe_type type() const;
 
     void entry_added(
         const struct doca_flow_pipe *pipe, 
@@ -61,8 +78,6 @@ private:
     std::map<EntryPtr, EntryMon> entries;
 };
 
-using PortStats = std::map<std::string, FlowStatsList>;
-
 class PortMon
 {
 public:
@@ -74,7 +89,7 @@ public:
 
     uint16_t port_id() const;
 
-    PortStats query() const;
+    PortStats query();
 
     void pipe_created(
         const struct doca_flow_pipe_cfg *cfg, 

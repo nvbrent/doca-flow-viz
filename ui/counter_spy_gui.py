@@ -7,7 +7,7 @@ from rich.live import Live
 from rich.console import Console
 from time import sleep
 
-from counter_spy_pb2 import EmptyRequest, Entry, Pipe, Port, QueryResult
+from counter_spy_pb2 import EmptyRequest, Entry, Pipe, Port, PortType, QueryResult
 from counter_spy_pb2_grpc import CounterSpyStub
 
 def convert_size(size_bytes):
@@ -22,10 +22,10 @@ def convert_size(size_bytes):
 def rich_port_stats(port: Port):
     port_tree = Tree(label="Pipes")
     for pipe in port.pipes:
-        pipe_title = pipe.name #+ "("
-#        if pipe.is_root():
-#            pipe_title += "root, "
-#        pipe_title += DocaFlowPipeType.Name(pipe.cfg.attr.type) + ")"
+        pipe_title = pipe.name + " ("
+        if pipe.is_root:
+            pipe_title += "root, "
+        pipe_title += PortType.Name(pipe.type) + ")"
         pipe_tree = port_tree.add(pipe_title)
         entry_table = Table()
         [entry_table.add_column(c) for c in ["Entry", "T.Pkts", "T.Bytes"]]
@@ -56,10 +56,12 @@ with Live(stats_table, refresh_per_second=4, screen=False) as live:
             show_rich_stats(result, stats_table)
         except Exception as e:
             stats_table.columns.clear()
-            #pass
+            stats_table.add_column("Error")
             if hasattr(e, 'details'):
-                print("Connecting..." + str(e.details()))
+                err = e.details()
             else:
-                print(e)
+                err = str(e)
+            stats_table.add_row(err)
+            
         sleep(1)
 

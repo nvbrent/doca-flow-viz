@@ -23,10 +23,10 @@ EntryMon::EntryMon(
     }
 }
 
-FlowStats
+EntryFlowStats
 EntryMon::query_entry() const
 {
-    FlowStats stats;
+    EntryFlowStats stats;
     stats.entry_ptr = entry_ptr;
     stats.shared_counter_id = 0;
     auto res = doca_flow_query_entry(
@@ -57,6 +57,16 @@ std::string PipeMon::name() const
     return attr_name;
 }
 
+bool PipeMon::is_root() const
+{
+    return attr.is_root;
+}
+
+doca_flow_pipe_type PipeMon::type() const
+{
+    return attr.type;
+}
+
 bool PipeMon::is_counter_active(const struct doca_flow_monitor *mon)
 {
 	return mon && (
@@ -65,17 +75,18 @@ bool PipeMon::is_counter_active(const struct doca_flow_monitor *mon)
     );
 }
 
-FlowStatsList
-PipeMon::query_entries() const
+PipeStats
+PipeMon::query_entries()
 {
-    FlowStatsList result;
-    result.reserve(entries.size());
+    PipeStats result;
+    result.pipe_mon = this;
+    result.pipe_stats.reserve(entries.size());
 
     //printf("Query: Pipe %s\n", attr_name.c_str());
     for (const auto &entry : entries) {
         auto stats = entry.second.query_entry();
         if (stats.valid) {
-            result.emplace_back(stats);
+            result.pipe_stats.emplace_back(stats);
         }
     }
 
@@ -121,15 +132,16 @@ uint16_t PortMon::port_id() const
 }
 
 PortStats
-PortMon::query() const
+PortMon::query()
 {
     std::lock_guard<std::mutex> lock(mutex);
     //printf("Query: Port %d\n", _port_id);
     PortStats stats;
-    for (const auto &pipe : pipes) {
-        FlowStatsList entries = pipe.second.query_entries();
-        if (!entries.empty()) {
-            stats[pipe.second.name()] = std::move(entries);
+    stats.port_mon = this;
+    for (auto &pipe : pipes) {
+        auto entries = pipe.second.query_entries();
+        if (!entries.pipe_stats.empty()) {
+            stats.port_stats[pipe.second.name()] = std::move(entries);
         }
     }
     return stats;
@@ -153,16 +165,6 @@ PipeMon *PortMon::find_pipe(const doca_flow_pipe *pipe)
     auto pipe_counters_iter = pipes.find(pipe);
     return (pipe_counters_iter == pipes.end()) ? nullptr : &pipe_counters_iter->second;
 
-}
-
-void counter_spy_svc_loop()
-{
-    while (true) {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-        for (const auto &port: ports) {
-            port.second.query();
-        }
-    }
 }
 
 #include <memory>
@@ -193,11 +195,15 @@ CounterSpyServiceImpl::getFlowCounts(
         port_obj->set_port_id(port_counters.port_id());
 
         auto port_stats = port_counters.query();
-        for (auto &pipe_iter : port_stats) {
+        for (auto &pipe_iter : port_stats.port_stats) {
+            auto &pipe = pipe_iter.second;
             auto *pipe_obj = port_obj->add_pipes();
             pipe_obj->set_name(pipe_iter.first);
+            pipe_obj->set_is_root(pipe.pipe_mon->is_root());
+            pipe_obj->set_type(
+                static_cast<doca_flow_counter_spy::PortType>(pipe.pipe_mon->type()));
 
-            for (auto &entry_iter : pipe_iter.second) {
+            for (auto &entry_iter : pipe_iter.second.pipe_stats) {
                 auto *entry_obj = pipe_obj->add_entries();
                 entry_obj->set_id((intptr_t)entry_iter.entry_ptr);
                 entry_obj->set_bytes(entry_iter.query.total_bytes);
