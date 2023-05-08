@@ -11,14 +11,14 @@ from time import sleep
 from counter_spy_pb2 import EmptyRequest, Entry, Pipe, Port, PortType, QueryResult
 from counter_spy_pb2_grpc import CounterSpyStub
 
-def convert_size(size_bytes):
+def convert_size(size_bytes, unit='B'):
    if size_bytes == 0:
        return "0B"
-   size_name = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+   size_name = ("", "K", "M", "G", "T", "P", "E", "Z", "Y")
    i = int(math.floor(math.log(size_bytes, 1024)))
    p = math.pow(1024, i)
    s = round(size_bytes / p, 2)
-   return "%s %s" % (s, size_name[i])
+   return "%s %s%s" % (s, size_name[i], unit)
 
 def rich_port_stats(port: Port):
     port_tree = Tree(label="Pipes")
@@ -35,8 +35,8 @@ def rich_port_stats(port: Port):
             if len(id) > 16:
                 id = id[0:6] + "..." + id[-7:-1]
             entry_table.add_row(id, 
-                str(entry.delta_packets), convert_size(entry.delta_bytes),
-                str(entry.total_packets), convert_size(entry.total_bytes))
+                convert_size(entry.delta_packets, 'P'), convert_size(entry.delta_bytes),
+                convert_size(entry.total_packets, 'P'), convert_size(entry.total_bytes))
         pipe_tree.add(entry_table)
     return port_tree
 
