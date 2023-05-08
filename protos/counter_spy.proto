@@ -33,14 +33,16 @@ message Pipe
 {
     string name = 1;
     repeated Entry entries = 2;
-    bool is_root = 3;
-    PortType type = 4;
+    repeated Entry shared_counters = 3;
+    bool is_root = 4;
+    PortType type = 5;
 }
 
 message Port
 {
     uint32 port_id = 1;
     repeated Pipe pipes  = 2;
+    repeated Entry shared_counters = 3;
 }
 
 message QueryResult

@@ -26,12 +26,14 @@ struct PipeStats
 {
     PipeMon *pipe_mon;
     FlowStatsList pipe_stats;
+    FlowStatsList pipe_shared_counters;
 };
 
 struct PortStats
 {
     PortMon *port_mon;
     std::map<std::string, PipeStats> port_stats;
+    FlowStatsList port_shared_counters;
 };
 
 class EntryMon
@@ -49,6 +51,23 @@ private:
     struct doca_flow_query stats = {};
 };
 
+class SharedCounterMon
+{
+public:
+    SharedCounterMon();
+
+    bool is_empty() const;
+
+    void shared_counters_bound(
+        uint32_t *res_array,
+        uint32_t res_array_len);
+
+    FlowStatsList query_entries();
+
+private:
+    std::map<uint32_t, EntryFlowStats> shared_counter_ids;
+};
+
 class PipeMon
 {
 public:
@@ -64,6 +83,10 @@ public:
     bool is_root() const;
     doca_flow_pipe_type type() const;
 
+    void shared_counters_bound(
+        uint32_t *res_array,
+        uint32_t res_array_len);
+
     void entry_added(
         const struct doca_flow_pipe *pipe, 
         const struct doca_flow_monitor *monitor, 
@@ -78,6 +101,7 @@ private:
     struct doca_flow_pipe_attr attr = {};
     struct doca_flow_monitor mon = {};
     std::map<EntryPtr, EntryMon> entries;
+    SharedCounterMon shared_counters;
 };
 
 class PortMon
@@ -93,6 +117,10 @@ public:
 
     PortStats query();
 
+    void shared_counters_bound(
+        uint32_t *res_array,
+        uint32_t res_array_len);
+
     void pipe_created(
         const struct doca_flow_pipe_cfg *cfg, 
         const doca_flow_pipe *pipe);
@@ -107,6 +135,7 @@ private:
     uint16_t _port_id;
     const struct doca_flow_port *port;
     std::map<const PipePtr, PipeMon> pipes;
+    SharedCounterMon shared_counters;
     mutable std::mutex mutex;
 };
 

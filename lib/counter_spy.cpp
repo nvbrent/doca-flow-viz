@@ -65,6 +65,75 @@ EntryMon::query_entry()
     return stats;
 }
 
+SharedCounterMon::SharedCounterMon() = default;
+
+bool SharedCounterMon::is_empty() const
+{
+    return shared_counter_ids.empty();
+}
+
+void SharedCounterMon::shared_counters_bound(
+    uint32_t *res_array,
+    uint32_t res_array_len)
+{
+    for (uint32_t i=0; i<res_array_len; i++) {
+        shared_counter_ids[res_array[i]].shared_counter_id = res_array[i];
+    }
+}
+
+FlowStatsList SharedCounterMon::query_entries()
+{
+    FlowStatsList result;
+
+    size_t n_shared = shared_counter_ids.size();
+
+    if (n_shared == 0) {
+        return result;
+    }
+
+    // Keep a copy of the counters before the query so
+    // the delta can be computed
+    auto prev_counters = shared_counter_ids; // copy
+
+    // Prepare the vector of counter IDs for the batch query operation
+    std::vector<uint32_t> counter_ids;
+    counter_ids.reserve(n_shared);
+    for (const auto &shared_ctr : shared_counter_ids) {
+        counter_ids.push_back(shared_ctr.first);
+    }
+
+    // Prepare a vector for the output of the batch query:
+    std::vector<doca_flow_shared_resource_result> query_results_array(n_shared);
+
+    auto res = doca_flow_shared_resources_query(
+        DOCA_FLOW_SHARED_RESOURCE_COUNT, counter_ids.data(),
+        query_results_array.data(), n_shared);
+
+    if (res != DOCA_SUCCESS) {
+        return result;
+    }
+
+    result.reserve(result.size() + n_shared);
+
+    for (size_t i=0; i<n_shared; i++) {
+        auto &shared_ctr = shared_counter_ids[counter_ids[i]];
+        const auto &prev_ctr = prev_counters[counter_ids[i]];
+
+        // Update our internal state
+        shared_ctr.total = query_results_array[i].counter;
+        shared_ctr.delta.total_bytes = shared_ctr.total.total_bytes - prev_ctr.total.total_bytes;
+        shared_ctr.delta.total_pkts  = shared_ctr.total.total_pkts  - prev_ctr.total.total_pkts;
+
+        // Update the output message
+        auto &result_stat = result.emplace_back();
+        result_stat.shared_counter_id = counter_ids[i];
+        result_stat.total = shared_ctr.total;
+        result_stat.delta = shared_ctr.delta;
+    }
+
+    return result;
+}
+
 PipeMon::PipeMon() = default;
 
 PipeMon::PipeMon(
@@ -118,7 +187,16 @@ PipeMon::query_entries()
         }
     }
 
+    result.pipe_shared_counters = std::move(shared_counters.query_entries());
+
     return result;
+}
+
+void PipeMon::shared_counters_bound(
+    uint32_t *res_array,
+    uint32_t res_array_len)
+{
+    shared_counters.shared_counters_bound(res_array, res_array_len);
 }
 
 void PipeMon::entry_added(
@@ -172,7 +250,17 @@ PortMon::query()
             stats.port_stats[pipe.second.name()] = std::move(entries);
         }
     }
+
+    stats.port_shared_counters = std::move(shared_counters.query_entries());
+
     return stats;
+}
+
+void PortMon::shared_counters_bound(
+    uint32_t *res_array,
+    uint32_t res_array_len)
+{
+    shared_counters.shared_counters_bound(res_array, res_array_len);
 }
 
 void PortMon::pipe_created(
@@ -327,6 +415,35 @@ void counter_spy_entry_added(
         }
 
         pipe_counters->entry_added(pipe, monitor, entry);
+        break;
+    }
+}
+
+void counter_spy_shared_counters_bound(
+    enum doca_flow_shared_resource_type type, 
+    uint32_t *res_array,
+    uint32_t res_array_len, 
+    void *bindable_obj)
+{
+    // Determine whether bindable_obj is a port or pipe
+    auto find_port = ports.find((doca_flow_port*)bindable_obj);
+    if (find_port != ports.end()) {
+        // found a port!
+        find_port->second.shared_counters_bound(res_array, res_array_len);
+        return;
+    }
+
+    for (auto &port_iter : ports) {
+        auto &port_counters = port_iter.second;
+
+        std::lock_guard<std::mutex> lock(port_counters.get_mutex());
+
+        auto pipe_counters = port_counters.find_pipe((PipePtr)bindable_obj);
+        if (!pipe_counters) {
+            continue; // pipe not found
+        }
+
+        pipe_counters->shared_counters_bound(res_array, res_array_len);
         break;
     }
 }

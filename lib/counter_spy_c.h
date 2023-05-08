@@ -29,6 +29,12 @@ void counter_spy_entry_added(
     const struct doca_flow_monitor *monitor, 
     const struct doca_flow_pipe_entry *entry);
 
+void counter_spy_shared_counters_bound(
+    enum doca_flow_shared_resource_type type, 
+    uint32_t *res_array,
+    uint32_t res_array_len, 
+    void *bindable_obj);
+
 #ifdef __cplusplus
 }
 #endif

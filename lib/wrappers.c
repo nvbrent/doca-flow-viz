@@ -102,3 +102,16 @@ doca_flow_pipe_control_add_entry(uint16_t pipe_queue,
 	}
 	return res;
 }
+
+doca_error_t
+doca_flow_shared_resources_bind(enum doca_flow_shared_resource_type type, uint32_t *res_array,
+				uint32_t res_array_len, void *bindable_obj)
+{
+	doca_error_t res = (*p_doca_flow_shared_resources_bind)(
+		type, res_array, res_array_len, bindable_obj);
+	if (res == DOCA_SUCCESS && type == DOCA_FLOW_SHARED_RESOURCE_COUNT) {
+		counter_spy_shared_counters_bound(
+			type, res_array, res_array_len, bindable_obj);
+	}
+	return res;
+}
