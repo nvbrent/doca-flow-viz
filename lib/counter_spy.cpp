@@ -297,7 +297,26 @@ public:
         ::grpc::ServerContext* context, 
         const ::doca_flow_counter_spy::EmptyRequest* request, 
         ::doca_flow_counter_spy::QueryResult* response) override;
+
+    void addStats(
+        const EntryFlowStats &entry_stats,
+        doca_flow_counter_spy::Entry *entry_obj);
 };
+
+void CounterSpyServiceImpl::addStats(
+    const EntryFlowStats &entry_stats,
+    doca_flow_counter_spy::Entry *entry_obj)
+{
+    if (entry_stats.entry_ptr) {
+        entry_obj->set_id((intptr_t)entry_stats.entry_ptr);
+    } else if (entry_stats.shared_counter_id) {
+        entry_obj->set_shared_counter_id(entry_stats.shared_counter_id);
+    }
+    entry_obj->set_total_bytes(entry_stats.total.total_bytes);
+    entry_obj->set_total_packets(entry_stats.total.total_pkts);
+    entry_obj->set_delta_bytes(entry_stats.delta.total_bytes);
+    entry_obj->set_delta_packets(entry_stats.delta.total_pkts);
+}
 
 ::grpc::Status 
 CounterSpyServiceImpl::getFlowCounts(
@@ -320,14 +339,18 @@ CounterSpyServiceImpl::getFlowCounts(
                 static_cast<doca_flow_counter_spy::PortType>(pipe.pipe_mon->type()));
 
             for (auto &entry_iter : pipe_iter.second.pipe_stats) {
-                auto *entry_obj = pipe_obj->add_entries();
-                entry_obj->set_id((intptr_t)entry_iter.entry_ptr);
-                entry_obj->set_total_bytes(entry_iter.total.total_bytes);
-                entry_obj->set_total_packets(entry_iter.total.total_pkts);
-                entry_obj->set_delta_bytes(entry_iter.delta.total_bytes);
-                entry_obj->set_delta_packets(entry_iter.delta.total_pkts);
+                addStats(entry_iter, pipe_obj->add_entries());
+            }
+
+            for (auto &shared_iter : pipe_iter.second.pipe_shared_counters) {
+                addStats(shared_iter, pipe_obj->add_shared_counters());
             }
         }
+
+        for (auto &shared_iter : port_stats.port_shared_counters) {
+            addStats(shared_iter, port_obj->add_shared_counters());
+        }
+        break; // TODO: enable other ports
     }
     return ::grpc::Status::OK;
 }

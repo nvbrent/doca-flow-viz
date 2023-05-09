@@ -61,6 +61,9 @@ flow_init(
 		.queues = dpdk_config->port_config.nb_queues,
         .queue_depth = 128,
 		.resource.nb_counters = 1024,
+        .nr_shared_resources = {
+            [DOCA_FLOW_SHARED_RESOURCE_COUNT] = 1024,
+        },
 	};
 	doca_error_t res = doca_flow_init(&arp_sc_flow_cfg);
     if (res != DOCA_SUCCESS) {
@@ -80,6 +83,20 @@ flow_init(
 			return -1;
 		}
 	}
+
+    /* bind some shared counters */
+	for (uint16_t port_id = 0; port_id < dpdk_config->port_config.nb_ports; port_id++) {
+        const uint32_t N_SHARED = 10;
+        uint32_t shared_counter_id[N_SHARED];
+        for (uint32_t i=0; i<N_SHARED; i++) {
+            shared_counter_id[i] = (port_id+1) * 10 + i;
+        }
+        if (doca_flow_shared_resources_bind(
+                DOCA_FLOW_SHARED_RESOURCE_COUNT, shared_counter_id, N_SHARED, ports[port_id])) {
+			DOCA_LOG_ERR("DOCA Flow port shared-counter-bind failed");
+			return -1;
+        }
+    }
 
 	DOCA_LOG_DBG("DOCA flow init done");
 	return 0;
@@ -192,16 +209,6 @@ int main(int argc, char *argv[])
 
     create_flows(ports, dpdk_config.port_config.nb_ports);
 
-#if 0
-	uint32_t lcore_id;
-	RTE_LCORE_FOREACH_WORKER(lcore_id) {
-		rte_eal_remote_launch(sample_lcore_func, &config, lcore_id);
-	}
-	RTE_LCORE_FOREACH_WORKER(lcore_id) {
-		rte_eal_wait_lcore(lcore_id);
-	}
-#endif
-	
     while (!force_quit) {
         printf("sleeping...\n");
         sleep(8);

@@ -22,11 +22,14 @@ message EmptyRequest {}
 
 message Entry
 {
-    uint64 id = 1;
-    uint64 total_packets = 2;
-    uint64 total_bytes = 3;
-    uint64 delta_packets = 4;
-    uint64 delta_bytes = 5;
+    oneof id_type {
+        uint64 id = 1;
+        uint32 shared_counter_id = 2;
+    }
+    uint64 total_packets = 3;
+    uint64 total_bytes = 4;
+    uint64 delta_packets = 5;
+    uint64 delta_bytes = 6;
 }
 
 message Pipe
