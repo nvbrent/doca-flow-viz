@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "gdb",
+            "name": "gdb sample_flow_program",
             "program": "${workspaceFolder}/build/test/sample_flow_program",
             "request": "launch",
             "type": "cppdbg",
@@ -20,6 +20,15 @@
             "environment": [
                 { "name": "LD_PRELOAD", "value": "${workspaceFolder}/build/lib/libdoca-counter-spy.so"}
             ]
+        },
+        {
+            "name": "Python GUI",
+            "type": "python",
+            "request": "launch",
+            "program": "ui/counter_spy_gui.py", 
+            //"module": "ui/counter_spy_gui.py",
+            "justMyCode": true,
+            "args": []
         }
     ]
 }

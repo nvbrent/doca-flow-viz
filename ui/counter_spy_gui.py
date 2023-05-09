@@ -20,24 +20,47 @@ def convert_size(size_bytes, unit='B'):
    s = round(size_bytes / p, 2)
    return "%s %s%s" % (s, size_name[i], unit)
 
+def add_counter_row(entry_table, entry, id):
+    if id is str and len(id) > 16:
+        id = id[0:6] + "..." + id[-7:-1]
+    entry_table.add_row(id, 
+        convert_size(entry.delta_packets, 'P'), 
+        convert_size(entry.delta_bytes),
+        convert_size(entry.total_packets, 'P'), 
+        convert_size(entry.total_bytes)
+        )
+
+def add_shared_counter_table(
+        parent_tree: Tree, 
+        table_title: str, 
+        first_col: str,
+        shared_counters: list):
+    if len(shared_counters) == 0:
+        return
+
+    shared_ctr_tree = parent_tree.add(table_title)
+    ctr_table = Table(first_col, "D.Pkts", "D.Bytes", "T.Pkts", "T.Bytes")
+    for counter in shared_counters:
+        add_counter_row(ctr_table, counter, str(counter.shared_counter_id))
+    shared_ctr_tree.add(ctr_table)
+
 def rich_port_stats(port: Port):
     port_tree = Tree(label="Pipes")
     for pipe in port.pipes:
-        pipe_title = pipe.name + " ("
+        pipe_title = pipe.name + " Entries ("
         if pipe.is_root:
             pipe_title += "root, "
         pipe_title += PortType.Name(pipe.type) + ")"
         pipe_tree = port_tree.add(pipe_title)
-        entry_table = Table()
-        [entry_table.add_column(c) for c in ["Entry", "D.Pkts", "D.Bytes", "T.Pkts", "T.Bytes"]]
+        entry_table = Table("Entry", "D.Pkts", "D.Bytes", "T.Pkts", "T.Bytes")
         for entry in pipe.entries:
-            id = hex(entry.id)
-            if len(id) > 16:
-                id = id[0:6] + "..." + id[-7:-1]
-            entry_table.add_row(id, 
-                convert_size(entry.delta_packets, 'P'), convert_size(entry.delta_bytes),
-                convert_size(entry.total_packets, 'P'), convert_size(entry.total_bytes))
+            add_counter_row(entry_table, entry, hex(entry.id))
         pipe_tree.add(entry_table)
+
+        add_shared_counter_table(port_tree, pipe.name + " Shared Counters", "Sh.Counter", pipe.shared_counters)
+
+    add_shared_counter_table(port_tree, "Port Shared Counters", "Sh.Counter", port.shared_counters)
+
     return port_tree
 
 def show_rich_stats(result: QueryResult, stats_table : Table):

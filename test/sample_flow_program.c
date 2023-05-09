@@ -84,9 +84,9 @@ flow_init(
 		}
 	}
 
-    /* bind some shared counters */
+    /* bind some shared counters to the ports */
 	for (uint16_t port_id = 0; port_id < dpdk_config->port_config.nb_ports; port_id++) {
-        const uint32_t N_SHARED = 10;
+        const uint32_t N_SHARED = 4;
         uint32_t shared_counter_id[N_SHARED];
         for (uint32_t i=0; i<N_SHARED; i++) {
             shared_counter_id[i] = (port_id+1) * 10 + i;
@@ -117,7 +117,7 @@ void create_flows(
     struct doca_flow_port *ports[], 
     uint16_t num_ports)
 {
-    for (uint16_t i=0; i<num_ports; i++)
+    for (uint16_t port_id=0; port_id<num_ports; port_id++)
     {
         doca_error_t res;
         struct doca_flow_match match = {};
@@ -129,7 +129,7 @@ void create_flows(
             .attr = {
                 .name = "SAMPLE_PIPE",
             },
-            .port = ports[i],
+            .port = ports[port_id],
             .match = &match,
             .monitor = &mon,
         };
@@ -138,6 +138,17 @@ void create_flows(
         res = doca_flow_pipe_create(&cfg, &fwd, &miss, &pipe);
         if (res != DOCA_SUCCESS) {
 		    DOCA_LOG_ERR("Failed to create Pipe: %s", doca_get_error_string(res));
+        }
+
+        /* bind some shared counters to the first pipe */
+        const uint32_t N_SHARED = 3;
+        uint32_t shared_counter_id[N_SHARED];
+        for (uint32_t i=0; i<N_SHARED; i++) {
+            shared_counter_id[i] = (port_id+5) * 10 + i;
+        }
+        if (doca_flow_shared_resources_bind(
+                DOCA_FLOW_SHARED_RESOURCE_COUNT, shared_counter_id, N_SHARED, pipe)) {
+            DOCA_LOG_ERR("DOCA Flow port shared-counter-bind failed");
         }
 
         for (int j=0; j<5; j++) {
@@ -150,7 +161,7 @@ void create_flows(
             .attr = {
                 .name = "NEXT_PIPE",
             },
-            .port = ports[i],
+            .port = ports[port_id],
             .match = &match,
             .monitor = &mon,
         };
@@ -169,7 +180,7 @@ void create_flows(
                 .name = "ROOT_PIPE",
                 .is_root = true,
             },
-            .port = ports[i],
+            .port = ports[port_id],
             .match = &match,
             .monitor = NULL, // "Counter action on root table is not supported in HW steering mode"
         };

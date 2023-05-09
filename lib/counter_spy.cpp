@@ -105,12 +105,14 @@ FlowStatsList SharedCounterMon::query_entries()
     // Prepare a vector for the output of the batch query:
     std::vector<doca_flow_shared_resource_result> query_results_array(n_shared);
 
-    auto res = doca_flow_shared_resources_query(
-        DOCA_FLOW_SHARED_RESOURCE_COUNT, counter_ids.data(),
-        query_results_array.data(), n_shared);
+    if (!fake_stats_enabled) {
+        auto res = doca_flow_shared_resources_query(
+            DOCA_FLOW_SHARED_RESOURCE_COUNT, counter_ids.data(),
+            query_results_array.data(), n_shared);
 
-    if (res != DOCA_SUCCESS) {
-        return result;
+        if (res != DOCA_SUCCESS) {
+            return result;
+        }
     }
 
     result.reserve(result.size() + n_shared);
@@ -118,17 +120,26 @@ FlowStatsList SharedCounterMon::query_entries()
     for (size_t i=0; i<n_shared; i++) {
         auto &shared_ctr = shared_counter_ids[counter_ids[i]];
         const auto &prev_ctr = prev_counters[counter_ids[i]];
-
-        // Update our internal state
-        shared_ctr.total = query_results_array[i].counter;
-        shared_ctr.delta.total_bytes = shared_ctr.total.total_bytes - prev_ctr.total.total_bytes;
-        shared_ctr.delta.total_pkts  = shared_ctr.total.total_pkts  - prev_ctr.total.total_pkts;
-
-        // Update the output message
         auto &result_stat = result.emplace_back();
         result_stat.shared_counter_id = counter_ids[i];
-        result_stat.total = shared_ctr.total;
-        result_stat.delta = shared_ctr.delta;
+
+        if (fake_stats_enabled) {
+            // Generate a fake delta and accumulate the total
+            result_stat.delta.total_bytes = (uint64_t)std::abs(bytes_random_dist(rng));
+            result_stat.delta.total_pkts  = (uint64_t)std::abs(pkts_random_dist(rng));
+            shared_ctr.total.total_bytes += result_stat.delta.total_bytes;
+            shared_ctr.total.total_pkts  += result_stat.delta.total_pkts;
+            result_stat.total = shared_ctr.total;
+        } else {
+            // Update our internal state
+            shared_ctr.total = query_results_array[i].counter;
+            shared_ctr.delta.total_bytes = shared_ctr.total.total_bytes - prev_ctr.total.total_bytes;
+            shared_ctr.delta.total_pkts  = shared_ctr.total.total_pkts  - prev_ctr.total.total_pkts;
+
+            // Update the output message
+            result_stat.total = shared_ctr.total;
+            result_stat.delta = shared_ctr.delta;
+        }
     }
 
     return result;
@@ -350,7 +361,6 @@ CounterSpyServiceImpl::getFlowCounts(
         for (auto &shared_iter : port_stats.port_shared_counters) {
             addStats(shared_iter, port_obj->add_shared_counters());
         }
-        break; // TODO: enable other ports
     }
     return ::grpc::Status::OK;
 }
