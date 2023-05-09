@@ -12,6 +12,9 @@ class EntryMon;
 class PipeMon;
 class PortMon;
 
+extern const std::string COUNTER_SPY_FAKE_STATS_ENV_VAR;
+extern bool fake_stats_enabled;
+
 struct EntryFlowStats
 {
     bool valid = false;

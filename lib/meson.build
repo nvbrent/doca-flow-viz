@@ -13,6 +13,7 @@ app_srcs = [
 	'wrappers.c',
 	'wrapper_init.c',
 	'counter_spy.cpp',
+	'counter_spy_svc.cpp',
 ]
 
 app_inc_dirs = [include_directories(common_dir_path)]
