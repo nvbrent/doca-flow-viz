@@ -17,7 +17,7 @@
 
 #define COUNTER_SPY_DECL_NO_EXTERN
 #include <wrapper_decls.h>
-#include <counter_spy_c.h>
+#include <flow_viz_c.h>
 
 #define DOCA_FLOW_SO "libdoca_flow.so"
 
@@ -59,7 +59,6 @@ void load_wrappers(void)
     INIT_PFUNC(doca_flow_pipe_create,            handle_doca_flow);
     INIT_PFUNC(doca_flow_pipe_add_entry,         handle_doca_flow);
     INIT_PFUNC(doca_flow_pipe_control_add_entry, handle_doca_flow);
-    INIT_PFUNC(doca_flow_shared_resources_bind,  handle_doca_flow);
 }
 
 void init_logger(void)
@@ -69,5 +68,5 @@ void init_logger(void)
 
 void close_logger(void)
 {
-    counter_spy_stop_service();
+    flow_viz_stop_service();
 }

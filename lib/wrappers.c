@@ -1,6 +1,6 @@
 #include <doca_flow.h>
 #include <wrapper_decls.h>
-#include <counter_spy_c.h>
+#include <flow_viz_c.h>
 
 // Wrapper functions from doca_flow.h
 
@@ -9,7 +9,7 @@ doca_flow_init(const struct doca_flow_cfg *cfg)
 {
 	doca_error_t res = (*p_doca_flow_init)(cfg);
 	if (res == DOCA_SUCCESS) {
-		counter_spy_start_service();
+		flow_viz_start_service();
 	}
 	return res;
 }
@@ -18,7 +18,7 @@ void
 doca_flow_destroy(void)
 {
 	(*p_doca_flow_destroy)();
-	counter_spy_stop_service();
+	flow_viz_stop_service();
 }
 
 doca_error_t
@@ -27,7 +27,7 @@ doca_flow_port_start(const struct doca_flow_port_cfg *cfg,
 {
 	doca_error_t res = (*p_doca_flow_port_start)(cfg, port);
 	if (res == DOCA_SUCCESS) {
-		counter_spy_port_started(cfg->port_id, *port);
+		flow_viz_port_started(cfg->port_id, *port);
 	}
 	return res;
 }
@@ -37,7 +37,7 @@ doca_flow_port_stop(struct doca_flow_port *port)
 {
 	doca_error_t res = (*p_doca_flow_port_stop)(port);
 	if (res == DOCA_SUCCESS) {
-		counter_spy_port_stopped(port);
+		flow_viz_port_stopped(port);
 	}
 	return res;
 }
@@ -46,7 +46,7 @@ void
 doca_flow_port_pipes_flush(struct doca_flow_port *port)
 {
 	(*p_doca_flow_port_pipes_flush)(port);
-	counter_spy_port_flushed(port);
+	flow_viz_port_flushed(port);
 }
 
 doca_error_t
@@ -57,7 +57,7 @@ doca_flow_pipe_create(const struct doca_flow_pipe_cfg *cfg,
 {
     doca_error_t res = (*p_doca_flow_pipe_create)(cfg, fwd, fwd_miss, pipe);
 	if (res == DOCA_SUCCESS) {
-		counter_spy_pipe_created(cfg, *pipe);
+		flow_viz_pipe_created(cfg, fwd, fwd_miss, *pipe);
 	}
     return res;
 }
@@ -77,7 +77,7 @@ doca_flow_pipe_add_entry(uint16_t pipe_queue,
         pipe_queue, pipe, match, actions, monitor, fwd, 
         flags, usr_ctx, entry);
 	if (res == DOCA_SUCCESS) {
-		counter_spy_entry_added(pipe, monitor, *entry);
+		flow_viz_entry_added(pipe, fwd, monitor, *entry);
 	}
 	return res;
 }
@@ -98,20 +98,7 @@ doca_flow_pipe_control_add_entry(uint16_t pipe_queue,
         pipe_queue, priority, pipe, match, match_mask, 
 		actions, action_descs, monitor, fwd, entry);
 	if (res == DOCA_SUCCESS) {
-		counter_spy_entry_added(pipe, monitor, *entry);
-	}
-	return res;
-}
-
-doca_error_t
-doca_flow_shared_resources_bind(enum doca_flow_shared_resource_type type, uint32_t *res_array,
-				uint32_t res_array_len, void *bindable_obj)
-{
-	doca_error_t res = (*p_doca_flow_shared_resources_bind)(
-		type, res_array, res_array_len, bindable_obj);
-	if (res == DOCA_SUCCESS && type == DOCA_FLOW_SHARED_RESOURCE_COUNT) {
-		counter_spy_shared_counters_bound(
-			type, res_array, res_array_len, bindable_obj);
+		flow_viz_entry_added(pipe, fwd, monitor, *entry);
 	}
 	return res;
 }

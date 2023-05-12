@@ -1,9 +1,9 @@
 test_exe = executable('sample_flow_program', 
 	[
         'sample_flow_program.c',
-        common_dir_path + '/dpdk_utils.c',
-        common_dir_path + '/offload_rules.c',
-        common_dir_path + '/utils.c',
+        doca_common_dir_path + '/dpdk_utils.c',
+        doca_common_dir_path + '/offload_rules.c',
+        doca_common_dir_path + '/utils.c',
     ],
 	dependencies : app_dependencies,
 	include_directories : app_inc_dirs,
@@ -15,4 +15,4 @@ test('sample_flow_program', test_exe,
         '-a17:00.1,dv_flow_en=2', 
         '-c0x1'
     ],
-    env: ['LD_PRELOAD=' + spy_lib.full_path()])
+    env: ['LD_PRELOAD=' + flow_viz_lib.full_path()])
