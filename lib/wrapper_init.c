@@ -68,5 +68,5 @@ void init_logger(void)
 
 void close_logger(void)
 {
-    flow_viz_stop_service();
+    flow_viz_export();
 }

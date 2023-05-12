@@ -220,10 +220,7 @@ int main(int argc, char *argv[])
 
     create_flows(ports, dpdk_config.port_config.nb_ports);
 
-    while (!force_quit) {
-        printf("sleeping...\n");
-        sleep(8);
-    }
+    // Now we immediately shut down
 
 	flow_destroy(ports, dpdk_config.port_config.nb_ports);
 	doca_argp_destroy();

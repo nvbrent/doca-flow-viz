@@ -1,13 +1,26 @@
 #pragma once
 
 #include <inttypes.h>
-#include <vector>
+#include <functional>
 #include <string>
+#include <vector>
 
 #include <doca_flow.h>
 
 using Fwd = struct doca_flow_fwd;
 using Mon = struct doca_flow_monitor;
+
+using Port = struct doca_flow_port;
+using Pipe = struct doca_flow_pipe;
+using Entry = struct doca_flow_entry;
+
+struct Actions;
+struct EntryActions;
+struct PipeActions;
+struct PortActions;
+using PortActionMap = std::map<const Port *const, PortActions>;
+
+using export_function = std::function<void(const PortActionMap&, const char*)>;
 
 struct Actions
 {
@@ -19,13 +32,14 @@ using ActionList = std::vector<Actions>;
 
 struct EntryActions
 {
-    const struct doca_flow_entry *entry_ptr = {};
+    const Entry *entry_ptr = {};
     Actions actions;
 };
 
 struct PipeActions
 {
-    const struct doca_flow_pipe *pipe_ptr = {};
+    const Pipe *pipe_ptr = {};
+    const Port *port_ptr = {};
     struct doca_flow_pipe_attr attr = {};
     std::string attr_name;
     Actions pipe_actions;
@@ -34,11 +48,11 @@ struct PipeActions
 
 struct PortActions
 {
-    const struct doca_flow_port *port_ptr = {};
+    const Port *port_ptr = {};
     uint16_t port_id;
     std::map<const struct doca_flow_pipe*, PipeActions> pipe_actions;
 };
 
 // globals
-extern std::map<const struct doca_flow_port *const, PortActions> ports;
+extern PortActionMap ports;
 

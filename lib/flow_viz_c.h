@@ -6,9 +6,9 @@
 extern "C" {
 #endif
 
-void flow_viz_start_service(void);
+void flow_viz_init(void);
 
-void flow_viz_stop_service(void);
+void flow_viz_export(void);
 
 void flow_viz_port_started(
     uint16_t port_id,

@@ -9,7 +9,7 @@ doca_flow_init(const struct doca_flow_cfg *cfg)
 {
 	doca_error_t res = (*p_doca_flow_init)(cfg);
 	if (res == DOCA_SUCCESS) {
-		flow_viz_start_service();
+		flow_viz_init();
 	}
 	return res;
 }
@@ -18,7 +18,7 @@ void
 doca_flow_destroy(void)
 {
 	(*p_doca_flow_destroy)();
-	flow_viz_stop_service();
+	flow_viz_export();
 }
 
 doca_error_t
