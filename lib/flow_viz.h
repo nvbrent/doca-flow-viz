@@ -42,6 +42,7 @@ struct PipeActions
     const Port *port_ptr = {};
     struct doca_flow_pipe_attr attr = {};
     std::string attr_name;
+    size_t instance_num;
     Actions pipe_actions;
     ActionList entries;
 };
@@ -50,6 +51,7 @@ struct PortActions
 {
     const Port *port_ptr = {};
     uint16_t port_id;
+    std::map<std::string, size_t> pipe_name_count;
     std::map<const struct doca_flow_pipe*, PipeActions> pipe_actions;
 };
 

@@ -49,6 +49,10 @@ void flow_viz_pipe_created(
     pipe_actions.port_ptr = cfg->port;
     pipe_actions.attr_name = cfg->attr.name;
     pipe_actions.attr = cfg->attr; // copy
+
+    auto &counter = port_actions.pipe_name_count[pipe_actions.attr_name];
+    pipe_actions.instance_num = counter++;
+
     if (cfg->monitor)
         pipe_actions.pipe_actions.mon = *cfg->monitor;
     if (fwd)
@@ -60,8 +64,7 @@ void flow_viz_pipe_created(
 void flow_viz_entry_added(
     const struct doca_flow_pipe *pipe, 
     const struct doca_flow_fwd *fwd,
-    const struct doca_flow_monitor *mon, 
-    const struct doca_flow_pipe_entry *entry)
+    const struct doca_flow_monitor *mon)
 {
     bool has_fwd = fwd && fwd->type;
     bool has_mon = mon && mon->flags;
@@ -100,16 +103,33 @@ public:
     std::ostream& export_ports(const PortActionMap& ports, std::ostream &out);
 
 protected:
-    std::ostream& declare_port(const PortActions &port, std::ostream &out);
-    std::ostream& declare_pipe(const PipeActions &port, std::ostream &out);
-    std::ostream& declare_entry(const EntryActions &port, std::ostream &out);
-    std::ostream& declare_rss(const PortActions &port, std::ostream &out);
-
-    std::ostream& export_port(const PortActions &port, std::ostream &out);
-    std::ostream& export_pipe(const PipeActions &pipe, std::ostream &out);
-    std::ostream& export_pipe_dir(
+    using Braces = std::pair<std::string, std::string>;
+    
+    std::ostream& declare_port(
+        const PortActions &port, 
+        std::ostream &out);
+    std::ostream& declare_pipe(
+        const PortActions &port,
         const PipeActions &pipe, 
-        bool is_miss,
+        std::ostream &out);
+    std::ostream& declare_entry(
+        const EntryActions &port, 
+        std::ostream &out);
+    std::ostream& declare_rss(
+        const PortActions &port, 
+        std::ostream &out);
+
+    std::ostream& export_port(
+        const PortActions &port, 
+        std::ostream &out);
+    std::ostream& export_pipe(
+        const PipeActions &pipe, 
+        std::ostream &out);
+    std::ostream& export_pipe_fwd(
+        const Fwd &fwd, 
+        const std::string &arrow_str,
+        const std::string &port_str,
+        const std::string &pipe_str,
         std::ostream &out);
     std::ostream& export_pipe_entry(
         const PipeActions &pipe,
@@ -119,6 +139,7 @@ protected:
     std::string stringify_port(const PortActions &port) const;
     std::string stringify_port(uint16_t port_id) const;
     std::string stringify_pipe(const PipeActions &pipe) const;
+    std::string stringify_pipe_instance(const PipeActions &pipe, const Braces &braces) const;
     std::string stringify_rss(const Fwd &rss_action) const;
 
     std::string tab = "    ";
@@ -134,9 +155,11 @@ protected:
     std::string fwd_arrow = "-->";
     std::string miss_arrow = "-.->";
 
-    using Braces = std::pair<std::string, std::string>;
     Braces port_braces = { "{{", "}}" };
     Braces pipe_braces = { "(", ")" };
+    Braces quotes = { "\"", "\"" };
+    Braces parens = { "(", ")" };
+    Braces empty_braces = { "", "" };
 
     std::string surround(std::string s, const Braces &braces) const {
         return braces.first + s + braces.second;
@@ -157,6 +180,14 @@ std::string MermaidExporter::stringify_pipe(const PipeActions& pipe) const
 {
     return pipe.attr_name; // TODO: replace whitespace, etc.
 }
+
+std::string MermaidExporter::stringify_pipe_instance(
+    const PipeActions &pipe,
+    const Braces &braces) const
+{
+    return stringify_pipe(pipe) + surround(std::to_string(pipe.instance_num), braces);
+}
+
 
 std::string MermaidExporter::stringify_rss(const Fwd &rss_action) const
 {
@@ -179,15 +210,34 @@ std::ostream& MermaidExporter::declare_port(const PortActions &port, std::ostrea
     return out;
 }
 
-std::ostream& MermaidExporter::declare_pipe(const PipeActions &pipe, std::ostream &out)
+std::ostream& MermaidExporter::declare_pipe(
+    const PortActions &port,
+    const PipeActions &pipe, 
+    std::ostream &out)
 {
     if (pipe_decls.find(pipe.pipe_ptr) != pipe_decls.end())
+        return out; // this specific pipe has already been declared
+    
+    auto name_count_iter = port.pipe_name_count.find(pipe.attr_name);
+    if (name_count_iter == port.pipe_name_count.end())
         return out;
 
-    const auto &pipe_str = pipe_decls[pipe.pipe_ptr] = stringify_pipe(pipe);
+    auto instance_count = name_count_iter->second;
+
     const auto &port_str = port_decls[pipe.port_ptr];
-    out << tab << port_str << "." << pipe.attr_name
-        << surround(port_str + "." + pipe_str, pipe_braces)
+
+    auto &pipe_str = pipe_decls[pipe.pipe_ptr] = instance_count > 1 ? 
+        stringify_pipe_instance(pipe, empty_braces) : 
+        stringify_pipe(pipe);
+    
+    std::string pretty_pipe_name = instance_count > 1 ?
+        stringify_pipe_instance(pipe, parens) : pipe_str;
+    
+    std::string full_pipe_name = port_str + "." + pipe_str;
+    std::string full_pipe_pretty_name = port_str + "." + pretty_pipe_name;
+        
+    out << tab << full_pipe_name
+        << surround(surround(full_pipe_pretty_name, quotes), pipe_braces)
         << std::endl;
     return out;
 }
@@ -216,45 +266,48 @@ std::ostream& MermaidExporter::export_port(const PortActions &port, std::ostream
 
 std::ostream& MermaidExporter::export_pipe(const PipeActions &pipe, std::ostream &out)
 {
-    for (bool b : { false, true })
-        export_pipe_dir(pipe, b, out);
-    return out;
-}
-
-std::ostream& MermaidExporter::export_pipe_dir(
-    const PipeActions &pipe, 
-    bool is_miss,
-    std::ostream &out)
-{
-    const auto &fwd = is_miss ? pipe.pipe_actions.fwd_miss : pipe.pipe_actions.fwd;
-    const auto &arrow = is_miss ? miss_arrow : fwd_arrow;
-
     const auto &port_str = port_decls[pipe.port_ptr];
     std::string pipe_str = port_str + "." + pipe_decls[pipe.pipe_ptr];
 
+    export_pipe_fwd(pipe.pipe_actions.fwd,      fwd_arrow,  port_str, pipe_str, out);
+    export_pipe_fwd(pipe.pipe_actions.fwd_miss, miss_arrow, port_str, pipe_str, out);
+
+    for (const auto &entry : pipe.entries) {
+        export_pipe_fwd(entry.fwd, fwd_arrow, port_str, pipe_str, out);
+    }
+    return out;
+}
+
+std::ostream& MermaidExporter::export_pipe_fwd(
+    const Fwd &fwd, 
+    const std::string &arrow_str,
+    const std::string &port_str,
+    const std::string &pipe_str,
+    std::ostream &out)
+{
     switch (fwd.type) {
     case DOCA_FLOW_FWD_NONE:
         break;
     case DOCA_FLOW_FWD_DROP:
         out << tab << pipe_str
-            << arrow << "drop"
+            << arrow_str << "drop"
             << std::endl;
         break;
     case DOCA_FLOW_FWD_PORT:
         out << tab << pipe_str
-            << arrow << stringify_port(fwd.port_id) << "." << egress
+            << arrow_str << stringify_port(fwd.port_id) << "." << egress
             << std::endl;
         break;
     case DOCA_FLOW_FWD_PIPE:
         out << tab << pipe_str
-            << arrow << port_str << "." << pipe_decls[fwd.next_pipe]
+            << arrow_str << port_str << "." << pipe_decls[fwd.next_pipe]
             << std::endl;
         break;
     case DOCA_FLOW_FWD_RSS:
     {
         auto rss_str = stringify_rss(fwd);
         out << tab << pipe_str 
-            << arrow << rss_str
+            << arrow_str << rss_str
             << std::endl;
         break;
     }        
@@ -280,13 +333,13 @@ std::ostream& MermaidExporter::export_ports(const PortActionMap& ports, std::ost
     }
     for (const auto &port : ports) {
         for (const auto &pipe : port.second.pipe_actions) {
-            declare_pipe(pipe.second, out);
+            declare_pipe(port.second, pipe.second, out);
         }
     }
     out << tab << drop_decl << std::endl;
 
     out << std::endl;
-        for (const auto &port : ports) {
+    for (const auto &port : ports) {
         export_port(port.second, out);
     }
     return out;
@@ -294,10 +347,14 @@ std::ostream& MermaidExporter::export_ports(const PortActionMap& ports, std::ost
 
 void flow_viz_export(void)
 {
-    MermaidExporter exporter;
-    std::ofstream out("flows.md");
-    out << "```mermaid" << std::endl;
-    exporter.export_ports(ports, out);
-    out << "```" << std::endl;
+    static bool export_done = false;
+    if (!export_done) {
+        MermaidExporter exporter;
+        std::ofstream out("flows.md");
+        out << "```mermaid" << std::endl;
+        exporter.export_ports(ports, out);
+        out << "```" << std::endl;
+        export_done = true;
+    }
 }
 

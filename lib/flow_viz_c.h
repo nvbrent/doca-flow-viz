@@ -29,8 +29,7 @@ void flow_viz_pipe_created(
 void flow_viz_entry_added(
     const struct doca_flow_pipe *pipe, 
     const struct doca_flow_fwd *fwd,
-    const struct doca_flow_monitor *monitor, 
-    const struct doca_flow_pipe_entry *entry);
+    const struct doca_flow_monitor *monitor);
 
 #ifdef __cplusplus
 }

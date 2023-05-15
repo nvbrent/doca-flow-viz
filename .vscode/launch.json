@@ -18,7 +18,7 @@
             ],
             "cwd": "${workspaceFolder}",
             "environment": [
-                { "name": "LD_PRELOAD", "value": "${workspaceFolder}/build/lib/libdoca-counter-spy.so"}
+                { "name": "LD_PRELOAD", "value": "${workspaceFolder}/build/lib/libdoca-flow-viz.so"}
             ]
         },
         {
@@ -29,6 +29,22 @@
             //"module": "ui/counter_spy_gui.py",
             "justMyCode": true,
             "args": []
+        },
+        {
+            "name": "gdb ipsec_gateway",
+            "program": "/opt/mellanox/doca/applications/security_gateway/bin/doca_security_gateway",
+            "request": "launch",
+            "type": "cppdbg",
+            "args": [
+                "-s", "03:00.0",
+                "-u", "03:00.1",
+                "-m", "transport",
+                "-c", "/opt/mellanox/doca/applications/security_gateway/bin/security_gateway_config.json"
+            ],
+            "cwd": "${workspaceFolder}",
+            "environment": [
+                { "name": "LD_PRELOAD", "value": "${workspaceFolder}/build/lib/libdoca-flow-viz.so"}
+            ]
         }
     ]
 }
