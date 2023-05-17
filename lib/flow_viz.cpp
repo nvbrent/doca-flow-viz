@@ -8,6 +8,7 @@
 #include <doca_flow.h>
 #include <flow_viz_c.h>
 #include <flow_viz.h>
+#include <flow_viz_util.h>
 
 PortActionMap ports;
 
@@ -59,10 +60,16 @@ void flow_viz_pipe_created(
         pipe_actions.pipe_actions.fwd = *fwd;
     if (fwd_miss)
         pipe_actions.pipe_actions.fwd_miss = *fwd_miss;
+    if (cfg->match)
+        pipe_actions.pipe_actions.match = *cfg->match; // copy
+    if (cfg->match_mask)
+        pipe_actions.pipe_actions.match_mask = *cfg->match_mask; // copy
 }
 
 void flow_viz_entry_added(
     const struct doca_flow_pipe *pipe, 
+    const struct doca_flow_match *match,
+    const struct doca_flow_match *match_mask,
     const struct doca_flow_fwd *fwd,
     const struct doca_flow_monitor *mon)
 {
@@ -86,6 +93,10 @@ void flow_viz_entry_added(
             entry_actions.fwd = *fwd;
         if (mon)
             entry_actions.mon = *mon;
+        if (match)
+            entry_actions.match = *match;
+        if (match_mask)
+            entry_actions.match_mask = *match_mask;
         break;
     }
 }
@@ -130,6 +141,7 @@ protected:
         const std::string &arrow_str,
         const std::string &port_str,
         const std::string &pipe_str,
+        const std::string &l3_l4_type,
         std::ostream &out);
     std::ostream& export_pipe_entry(
         const PipeActions &pipe,
@@ -159,6 +171,7 @@ protected:
     Braces pipe_braces = { "(", ")" };
     Braces quotes = { "\"", "\"" };
     Braces parens = { "(", ")" };
+    Braces vbars = { "|", "|" };
     Braces empty_braces = { "", "" };
 
     std::string surround(std::string s, const Braces &braces) const {
@@ -268,12 +281,14 @@ std::ostream& MermaidExporter::export_pipe(const PipeActions &pipe, std::ostream
 {
     const auto &port_str = port_decls[pipe.port_ptr];
     std::string pipe_str = port_str + "." + pipe_decls[pipe.pipe_ptr];
+    auto l3_l4_type = summarize_l3_l4_types(pipe, nullptr);
 
-    export_pipe_fwd(pipe.pipe_actions.fwd,      fwd_arrow,  port_str, pipe_str, out);
-    export_pipe_fwd(pipe.pipe_actions.fwd_miss, miss_arrow, port_str, pipe_str, out);
+    export_pipe_fwd(pipe.pipe_actions.fwd,      fwd_arrow,  port_str, pipe_str, l3_l4_type, out);
+    export_pipe_fwd(pipe.pipe_actions.fwd_miss, miss_arrow, port_str, pipe_str, l3_l4_type, out);
 
     for (const auto &entry : pipe.entries) {
-        export_pipe_fwd(entry.fwd, fwd_arrow, port_str, pipe_str, out);
+        l3_l4_type = summarize_l3_l4_types(pipe, &entry);
+        export_pipe_fwd(entry.fwd, fwd_arrow, port_str, pipe_str, l3_l4_type, out);
     }
     return out;
 }
@@ -283,8 +298,11 @@ std::ostream& MermaidExporter::export_pipe_fwd(
     const std::string &arrow_str,
     const std::string &port_str,
     const std::string &pipe_str,
+    const std::string &l3_l4_type,
     std::ostream &out)
 {
+    std::string l3_l4_label = l3_l4_type.size() ? surround(l3_l4_type, vbars) : "";
+
     switch (fwd.type) {
     case DOCA_FLOW_FWD_NONE:
         break;
@@ -300,7 +318,7 @@ std::ostream& MermaidExporter::export_pipe_fwd(
         break;
     case DOCA_FLOW_FWD_PIPE:
         out << tab << pipe_str
-            << arrow_str << port_str << "." << pipe_decls[fwd.next_pipe]
+            << arrow_str << l3_l4_label << port_str << "." << pipe_decls[fwd.next_pipe]
             << std::endl;
         break;
     case DOCA_FLOW_FWD_RSS:

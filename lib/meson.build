@@ -2,6 +2,7 @@ app_srcs = [
 	'wrappers.c',
 	'wrapper_init.c',
 	'flow_viz.cpp',
+	'flow_viz_util.cpp',
 ]
 
 app_inc_dirs = [include_directories(doca_common_dir_path)]

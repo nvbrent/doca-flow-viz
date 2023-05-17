@@ -77,7 +77,7 @@ doca_flow_pipe_add_entry(uint16_t pipe_queue,
         pipe_queue, pipe, match, actions, monitor, fwd, 
         flags, usr_ctx, entry);
 	if (res == DOCA_SUCCESS) {
-		flow_viz_entry_added(pipe, fwd, monitor);
+		flow_viz_entry_added(pipe, match, NULL, fwd, monitor);
 	}
 	return res;
 }
@@ -98,7 +98,7 @@ doca_flow_pipe_control_add_entry(uint16_t pipe_queue,
         pipe_queue, priority, pipe, match, match_mask, 
 		actions, action_descs, monitor, fwd, entry);
 	if (res == DOCA_SUCCESS) {
-		flow_viz_entry_added(pipe, fwd, monitor);
+		flow_viz_entry_added(pipe, match, match_mask, fwd, monitor);
 	}
 	return res;
 }

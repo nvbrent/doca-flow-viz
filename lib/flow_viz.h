@@ -2,6 +2,7 @@
 
 #include <inttypes.h>
 #include <functional>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -13,6 +14,7 @@ using Mon = struct doca_flow_monitor;
 using Port = struct doca_flow_port;
 using Pipe = struct doca_flow_pipe;
 using Entry = struct doca_flow_entry;
+using Match = struct doca_flow_match;
 
 struct Actions;
 struct EntryActions;
@@ -27,12 +29,15 @@ struct Actions
     Fwd fwd = {};
     Fwd fwd_miss = {};
     Mon mon = {};
+    Match match = {};
+    Match match_mask = {};
 };
 using ActionList = std::vector<Actions>;
 
 struct EntryActions
 {
     const Entry *entry_ptr = {};
+    struct doca_flow_match match = {};
     Actions actions;
 };
 
