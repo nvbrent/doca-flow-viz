@@ -4,15 +4,21 @@ The `flow-viz` library is a wrapper for `DOCA Flow`. It intercepts calls to crea
 
 Prerequisites: DOCA 2.0.2
 
-Building `flow-viz`:
+## Building `flow-viz`:
 ```
 meson build
 ninja -C build
 ```
 
-Viewing the results: `TODO`
+Viewing the results:
 
-Usage:
+During development, it's handy to install a Mermaid [previewer plugin](https://marketplace.visualstudio.com/items?itemName=bierner.markdown-mermaid) for VSCode.
+
+One common method of rendering Mermaid graphs is to include them in Markdown in a Mermaid code block (` ```mermaid ... ``` `); this displays correctly in a Web browser when the Markdown is rendered by [Gitlab](https://docs.gitlab.com/ee/user/markdown.html#mermaid).
+
+Mermaid can also be embedded into HTML as described [here](https://mermaid.js.org/config/usage.html).
+
+## Usage:
 
 Simply prefix your regular DOCA application command line with `LD_PRELOAD=/path/to/libdocaflow-viz.so` and run your DOCA program normally.
 
