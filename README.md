@@ -21,7 +21,51 @@ Example of running the built-in sample:
 LD_PRELOAD=build/lib/libdoca-flow-viz.so build/test/sample_flow_program -a17:00.0,dv_flow_en=2 -a17:00.1,dv_flow_en=2 -c0x1
 ```
 
-Example output:
+Example output of the DOCA IPsec Security Gateway Sample Application (actual output!):
+```mermaid
+flowchart LR
+    p0.ingress{{p0.ingress}}
+    p0.egress{{p0.egress}}
+    p1.ingress{{p1.ingress}}
+    p1.egress{{p1.egress}}
+    p0.ENCRYPT_PIPE("p0.ENCRYPT_PIPE")
+    p0.DECRYPT_SYNDROME_PIPE("p0.DECRYPT_SYNDROME_PIPE")
+    p0.DECRYPT_PIPE0("p0.DECRYPT_PIPE(0)")
+    p0.DECRYPT_PIPE1("p0.DECRYPT_PIPE(1)")
+    p0.CONTROL_PIPE("p0.CONTROL_PIPE")
+    p1.HAIRPIN_PIPE0("p1.HAIRPIN_PIPE(0)")
+    p1.HAIRPIN_PIPE1("p1.HAIRPIN_PIPE(1)")
+    p1.HAIRPIN_PIPE2("p1.HAIRPIN_PIPE(2)")
+    p1.HAIRPIN_PIPE3("p1.HAIRPIN_PIPE(3)")
+    p1.SRC_IP6_PIPE0("p1.SRC_IP6_PIPE(0)")
+    p1.SRC_IP6_PIPE1("p1.SRC_IP6_PIPE(1)")
+    p1.CONTROL_PIPE("p1.CONTROL_PIPE")
+    drop[[drop]]
+
+p0.egress-->p0.ENCRYPT_PIPE-->    p0.secure_egress
+    p0.secure_ingress-->p0.CONTROL_PIPE-->    p0.ingress
+    p0.DECRYPT_SYNDROME_PIPE-->p1.egress
+    p0.DECRYPT_SYNDROME_PIPE-.->drop
+    p0.DECRYPT_PIPE0-.->drop
+    p0.DECRYPT_PIPE0-->|IPV4|p0.DECRYPT_SYNDROME_PIPE
+    p0.DECRYPT_PIPE1-.->drop
+    p0.DECRYPT_PIPE1-->|IPV6|p0.DECRYPT_SYNDROME_PIPE
+    p0.CONTROL_PIPE-->|IPV4|p0.DECRYPT_PIPE0
+    p0.CONTROL_PIPE-->|IPV6|p0.DECRYPT_PIPE1
+    p1.ingress-->p1.CONTROL_PIPE
+    p1.HAIRPIN_PIPE0-->|IPV4.TCP/+META|p0.egress
+    p1.HAIRPIN_PIPE1-->|IPV4.UDP/+META|p0.egress
+    p1.HAIRPIN_PIPE2-->|IPV6.TCP/+META|p0.egress
+    p1.HAIRPIN_PIPE3-->|IPV6.UDP/+META|p0.egress
+    p1.SRC_IP6_PIPE0-->|IPV6.TCP|p1.HAIRPIN_PIPE2
+    p1.SRC_IP6_PIPE1-->|IPV6.UDP|p1.HAIRPIN_PIPE3
+    p1.CONTROL_PIPE-->|IPV4.TCP|p1.HAIRPIN_PIPE0
+    p1.CONTROL_PIPE-->|IPV4.UDP|p1.HAIRPIN_PIPE1
+    p1.CONTROL_PIPE-->|IPV6.TCP|p1.SRC_IP6_PIPE0
+    p1.CONTROL_PIPE-->|IPV6.UDP|p1.SRC_IP6_PIPE1
+```
+
+Example output of a hypothetical application (work in progress):
 ```mermaid
 flowchart LR
     p0.ingress{{p0.ingress}}
