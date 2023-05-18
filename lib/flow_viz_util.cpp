@@ -163,3 +163,24 @@ std::string summarize_actions(const PktActions &pkt_actions)
         add_action_str(actions, "CRYPTO");
     return actions;
 }
+
+std::string summarize_crypto(const CryptoCfg &pkt_actions)
+{
+    std::string actions;
+    if (pkt_actions.proto_type == DOCA_FLOW_CRYPTO_PROTOCOL_NONE ||
+        pkt_actions.action_type == DOCA_FLOW_CRYPTO_ACTION_NONE) {
+        return actions;
+    }
+    // actions += pkt_actions.proto_type == DOCA_FLOW_CRYPTO_PROTOCOL_NISP ? "NISP/" : "ESP/";
+    actions += pkt_actions.action_type == DOCA_FLOW_CRYPTO_ACTION_ENCRYPT ? "ENCR" : "DECR";
+    if (pkt_actions.reformat_type == DOCA_FLOW_CRYPTO_REFORMAT_ENCAP)
+        actions += "/ENCAP";
+    else if (pkt_actions.reformat_type == DOCA_FLOW_CRYPTO_REFORMAT_DECAP)
+        actions += "/DECAP";
+    if (pkt_actions.net_type == DOCA_FLOW_CRYPTO_NET_TUNNEL)
+        actions += "/TUNNEL";
+    else if (pkt_actions.net_type == DOCA_FLOW_CRYPTO_NET_TRANSPORT)
+        actions += "/XPORT";
+    return actions;
+}
+

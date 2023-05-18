@@ -253,7 +253,13 @@ std::ostream& MermaidExporter::declare_port(const PortActions &port, std::ostrea
 
     const auto &port_str = port_decls[port.port_ptr] = stringify_port(port);
 
-    for (const auto &direction : { ingress, egress }) {
+    std::vector<std::string> directions = { ingress, egress };
+    if (!shared_crypto_map.empty()) {
+        directions.push_back(secure_ingress);
+        directions.push_back(secure_egress);
+    }
+
+    for (const auto &direction : directions) {
         out << tab << "p" << port.port_id << "." << direction 
             << surround(port_str + "." + direction, port_braces)
             << std::endl;
@@ -301,9 +307,6 @@ std::ostream& MermaidExporter::export_port(const PortActions &port, std::ostream
         if (!pipe.second.attr.is_root)
             continue;
 
-        if (is_exported(port.port_id, pipe.second.pipe_ptr))
-            continue;
-        
         const auto &port_str = port_decls[port.port_ptr];
         switch (pipe.second.attr.domain) {
         case DOCA_FLOW_PIPE_DOMAIN_DEFAULT:
@@ -322,23 +325,18 @@ std::ostream& MermaidExporter::export_port(const PortActions &port, std::ostream
             out << tab << port_str << "." << secure_ingress
                 << pipe_port_arrow 
                 << port_str << "." << pipe_decls[pipe.second.pipe_ptr]
-                << pipe_port_arrow 
-                << tab << port_str << "." << ingress
                 << std::endl;
             break;
         case DOCA_FLOW_PIPE_DOMAIN_SECURE_EGRESS:
             out << port_str << "." << egress
                 << pipe_port_arrow 
                 << port_str << "." << pipe_decls[pipe.second.pipe_ptr]
-                << pipe_port_arrow 
-                << tab << port_str << "." << secure_egress
                 << std::endl;
+            // Note port-->secure_egress will be exported later, with action annotations
             break;
         default:
             break;
         }
-
-        set_exported(port.port_id, pipe.second.pipe_ptr);
     }
 
     for (const auto &pipe : port.pipe_actions) {
@@ -376,11 +374,14 @@ std::ostream& MermaidExporter::export_pipe(const PipeActions &pipe, std::ostream
     const auto &port_str = port_decls[pipe.port_ptr];
     std::string pipe_str = port_str + "." + pipe_decls[pipe.pipe_ptr];
     auto l3_l4_type = summarize_l3_l4_types(pipe, nullptr);
-    auto action_str = summarize_actions(pipe.pipe_actions.pkt_actions);
 
     bool is_secure = false;
     const auto &normal_fwd = normal_or_crypto_fwd(pipe.pipe_actions, is_secure);
     const auto &miss_fwd   = pipe.pipe_actions.fwd_miss;
+    
+    auto action_str = is_secure ?
+        summarize_crypto(shared_crypto_map[pipe.pipe_actions.pkt_actions.security.crypto_id]) :
+        summarize_actions(pipe.pipe_actions.pkt_actions);
 
     export_pipe_fwd(normal_fwd, fwd_arrow,  port_str, pipe_str, l3_l4_type, action_str, is_secure, out);
     export_pipe_fwd(miss_fwd,   miss_arrow, port_str, pipe_str, l3_l4_type, "",         is_secure, out);
@@ -389,9 +390,11 @@ std::ostream& MermaidExporter::export_pipe(const PipeActions &pipe, std::ostream
 
     for (const auto &entry : pipe.entries) {
         l3_l4_type = summarize_l3_l4_types(pipe, &entry);
-        action_str = summarize_actions(entry.pkt_actions);
         const auto &entry_fwd = normal_or_crypto_fwd(entry, is_secure);
-
+        auto action_str = is_secure ?
+            summarize_crypto(shared_crypto_map[entry.pkt_actions.security.crypto_id]) :
+            summarize_actions(entry.pkt_actions);
+        
         if (!is_entry_redundant(pipe.pipe_ptr, entry_fwd)) {
             export_pipe_fwd(entry_fwd, fwd_arrow, port_str, pipe_str, l3_l4_type, action_str, is_secure, out);
             
@@ -424,12 +427,11 @@ std::ostream& MermaidExporter::export_pipe_fwd(
     switch (fwd.type) {
     case DOCA_FLOW_FWD_NONE:
         break;
-    case DOCA_FLOW_FWD_DROP: {
+    case DOCA_FLOW_FWD_DROP:
         out << tab << pipe_str
             << arrow_str << "drop"
             << std::endl;
         break;
-    }
     case DOCA_FLOW_FWD_PORT:
         out << tab << pipe_str
             << arrow_str << label << stringify_port(fwd.port_id) << "." 
