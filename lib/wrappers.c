@@ -77,7 +77,7 @@ doca_flow_pipe_add_entry(uint16_t pipe_queue,
         pipe_queue, pipe, match, actions, monitor, fwd, 
         flags, usr_ctx, entry);
 	if (res == DOCA_SUCCESS) {
-		flow_viz_entry_added(pipe, match, NULL, fwd, monitor);
+		flow_viz_entry_added(pipe, match, NULL, actions, fwd, monitor);
 	}
 	return res;
 }
@@ -98,7 +98,18 @@ doca_flow_pipe_control_add_entry(uint16_t pipe_queue,
         pipe_queue, priority, pipe, match, match_mask, 
 		actions, action_descs, monitor, fwd, entry);
 	if (res == DOCA_SUCCESS) {
-		flow_viz_entry_added(pipe, match, match_mask, fwd, monitor);
+		flow_viz_entry_added(pipe, match, match_mask, actions, fwd, monitor);
+	}
+	return res;
+}
+
+doca_error_t
+doca_flow_shared_resource_cfg(enum doca_flow_shared_resource_type type, uint32_t id,
+			      struct doca_flow_shared_resource_cfg *cfg)
+{
+	doca_error_t res = (*p_doca_flow_shared_resource_cfg)(type, id, cfg);
+	if (res == DOCA_SUCCESS) {
+		flow_viz_resource_bound(type, id, cfg);
 	}
 	return res;
 }

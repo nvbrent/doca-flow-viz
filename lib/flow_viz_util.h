@@ -23,3 +23,5 @@ enum doca_flow_l4_type_ext
 summarize_l4_type(const PipeActions &pipe, const Actions *entry, bool outer);
 
 std::string summarize_l3_l4_types(const PipeActions &pipe, const Actions *entry);
+
+std::string summarize_actions(const PktActions &pkt_actions);

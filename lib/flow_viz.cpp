@@ -2,6 +2,7 @@
 #include <iostream>
 #include <map>
 #include <mutex>
+#include <set>
 #include <string>
 #include <thread>
 
@@ -11,6 +12,7 @@
 #include <flow_viz_util.h>
 
 PortActionMap ports;
+SharedCryptoFwd shared_crypto_map;
 
 void flow_viz_port_started(
     uint16_t port_id,
@@ -39,7 +41,7 @@ void flow_viz_pipe_created(
 {
     if (!cfg || !cfg->attr.name || !pipe)
         return;
-    
+
     auto port_iter = ports.find(cfg->port);
     if (port_iter == ports.end())
         return;
@@ -64,20 +66,19 @@ void flow_viz_pipe_created(
         pipe_actions.pipe_actions.match = *cfg->match; // copy
     if (cfg->match_mask)
         pipe_actions.pipe_actions.match_mask = *cfg->match_mask; // copy
+    // NOTE: only one action supported
+    if (cfg->attr.nb_actions && cfg->actions && cfg->actions[0])
+        pipe_actions.pipe_actions.pkt_actions = *cfg->actions[0];
 }
 
 void flow_viz_entry_added(
     const struct doca_flow_pipe *pipe, 
     const struct doca_flow_match *match,
     const struct doca_flow_match *match_mask,
+    const struct doca_flow_actions *action,
     const struct doca_flow_fwd *fwd,
     const struct doca_flow_monitor *mon)
 {
-    bool has_fwd = fwd && fwd->type;
-    bool has_mon = mon && mon->flags;
-    if (!has_fwd && !has_mon)
-        return; // nothing to contribute
-
     for (auto &port_actions_iter : ports) {
         auto &port_actions = port_actions_iter.second;
 
@@ -88,6 +89,12 @@ void flow_viz_entry_added(
 
         auto &pipe_actions = pipe_actions_iter->second;
 
+        bool has_fwd = fwd && fwd->type;
+        bool has_mon = mon && mon->flags;
+        bool has_crypto = pipe_actions.pipe_actions.pkt_actions.security.proto_type != DOCA_FLOW_CRYPTO_PROTOCOL_NONE;
+        if (!has_fwd && !has_mon && !has_crypto)
+            return; // nothing to contribute
+
         auto &entry_actions = pipe_actions.entries.emplace_back();
         if (fwd)
             entry_actions.fwd = *fwd;
@@ -97,7 +104,20 @@ void flow_viz_entry_added(
             entry_actions.match = *match;
         if (match_mask)
             entry_actions.match_mask = *match_mask;
+        if (action)
+            entry_actions.pkt_actions = *action;
         break;
+    }
+}
+
+void flow_viz_resource_bound(
+    enum doca_flow_shared_resource_type type, 
+    uint32_t id,
+    struct doca_flow_shared_resource_cfg *cfg)
+{
+    if (type == DOCA_FLOW_SHARED_RESOURCE_CRYPTO) {
+        const auto &crypto_cfg = cfg->crypto_cfg;
+        shared_crypto_map[id] = crypto_cfg;
     }
 }
 
@@ -142,6 +162,8 @@ protected:
         const std::string &port_str,
         const std::string &pipe_str,
         const std::string &l3_l4_type,
+        const std::string &action_str,
+        bool is_secure,
         std::ostream &out);
     std::ostream& export_pipe_entry(
         const PipeActions &pipe,
@@ -154,6 +176,21 @@ protected:
     std::string stringify_pipe_instance(const PipeActions &pipe, const Braces &braces) const;
     std::string stringify_rss(const Fwd &rss_action) const;
 
+    // used to eliminate duplicate arrows
+    using PortPipePair = std::pair<uint16_t, const Pipe*>;
+    using PipePair = std::pair<const Pipe*, const Pipe*>;
+    std::set<PortPipePair> port_pipe_pairs_exported;
+    std::set<PipePair>     pipe_pairs_exported;
+    std::set<const Pipe*>  drop_pipes_exported;
+    
+    bool is_exported(uint16_t port_id, const Pipe* pipe) const;
+    bool is_exported(const Pipe* from_pipe, const Pipe* to_pipe) const;
+    bool is_entry_redundant(const Pipe *pipe_ptr, const Fwd& actions) const;
+
+    void set_exported(uint16_t port_id, const Pipe* pipe);
+    void set_exported(const Pipe* from_pipe, const Pipe* to_pipe);
+    void set_exported(const Pipe* pipe, const Fwd& actions);
+
     std::string tab = "    ";
     std::map<const Port*, std::string> port_decls;
     std::map<const Pipe*, std::string> pipe_decls;
@@ -162,6 +199,8 @@ protected:
 
     std::string ingress = "ingress";
     std::string egress = "egress";
+    std::string secure_ingress = "secure_ingress";
+    std::string secure_egress = "secure_egress";
 
     std::string pipe_port_arrow = "-->";
     std::string fwd_arrow = "-->";
@@ -258,16 +297,48 @@ std::ostream& MermaidExporter::declare_pipe(
 std::ostream& MermaidExporter::export_port(const PortActions &port, std::ostream &out)
 {
     // Connect each port to its root pipe
-    std::string direction = ingress;
     for (const auto &pipe : port.pipe_actions) {
         if (!pipe.second.attr.is_root)
             continue;
+
+        if (is_exported(port.port_id, pipe.second.pipe_ptr))
+            continue;
         
         const auto &port_str = port_decls[port.port_ptr];
-        out << tab << port_str << "." << direction
-            << pipe_port_arrow 
-            << port_str << "." << pipe_decls[pipe.second.pipe_ptr]
-            << std::endl;
+        switch (pipe.second.attr.domain) {
+        case DOCA_FLOW_PIPE_DOMAIN_DEFAULT:
+            out << tab << port_str << "." << ingress
+                << pipe_port_arrow 
+                << port_str << "." << pipe_decls[pipe.second.pipe_ptr]
+                << std::endl;
+            break;
+        case DOCA_FLOW_PIPE_DOMAIN_EGRESS:
+            out << tab << port_str << "." << egress
+                << pipe_port_arrow 
+                << port_str << "." << pipe_decls[pipe.second.pipe_ptr]
+                << std::endl;
+            break;
+        case DOCA_FLOW_PIPE_DOMAIN_SECURE_INGRESS:
+            out << tab << port_str << "." << secure_ingress
+                << pipe_port_arrow 
+                << port_str << "." << pipe_decls[pipe.second.pipe_ptr]
+                << pipe_port_arrow 
+                << tab << port_str << "." << ingress
+                << std::endl;
+            break;
+        case DOCA_FLOW_PIPE_DOMAIN_SECURE_EGRESS:
+            out << port_str << "." << egress
+                << pipe_port_arrow 
+                << port_str << "." << pipe_decls[pipe.second.pipe_ptr]
+                << pipe_port_arrow 
+                << tab << port_str << "." << secure_egress
+                << std::endl;
+            break;
+        default:
+            break;
+        }
+
+        set_exported(port.port_id, pipe.second.pipe_ptr);
     }
 
     for (const auto &pipe : port.pipe_actions) {
@@ -277,18 +348,55 @@ std::ostream& MermaidExporter::export_port(const PortActions &port, std::ostream
     return out;
 }
 
+const Fwd& normal_or_crypto_fwd(const Actions &actions, bool &is_secure)
+{
+    is_secure = false;
+    if (actions.pkt_actions.security.proto_type == DOCA_FLOW_CRYPTO_PROTOCOL_NONE &&
+        actions.pkt_actions.security.crypto_id == 0) {
+        return actions.fwd;
+    }
+
+    auto crypto_cfg_iter = shared_crypto_map.find(
+        actions.pkt_actions.security.crypto_id);
+
+    if (crypto_cfg_iter != shared_crypto_map.end()) {
+        const auto &crypto_cfg = crypto_cfg_iter->second;
+        is_secure = true;
+        return crypto_cfg.fwd;
+    }
+    return actions.fwd;
+}
+
+// Exports the fwd and fwd_miss actions of the pipe,
+// as well as each of its pipe entries.
+// Care is taken to ensure the same arrow never gets 
+// drawn more than once.
 std::ostream& MermaidExporter::export_pipe(const PipeActions &pipe, std::ostream &out)
 {
     const auto &port_str = port_decls[pipe.port_ptr];
     std::string pipe_str = port_str + "." + pipe_decls[pipe.pipe_ptr];
     auto l3_l4_type = summarize_l3_l4_types(pipe, nullptr);
+    auto action_str = summarize_actions(pipe.pipe_actions.pkt_actions);
 
-    export_pipe_fwd(pipe.pipe_actions.fwd,      fwd_arrow,  port_str, pipe_str, l3_l4_type, out);
-    export_pipe_fwd(pipe.pipe_actions.fwd_miss, miss_arrow, port_str, pipe_str, l3_l4_type, out);
+    bool is_secure = false;
+    const auto &normal_fwd = normal_or_crypto_fwd(pipe.pipe_actions, is_secure);
+    const auto &miss_fwd   = pipe.pipe_actions.fwd_miss;
+
+    export_pipe_fwd(normal_fwd, fwd_arrow,  port_str, pipe_str, l3_l4_type, action_str, is_secure, out);
+    export_pipe_fwd(miss_fwd,   miss_arrow, port_str, pipe_str, l3_l4_type, "",         is_secure, out);
+
+    set_exported(pipe.pipe_ptr, normal_fwd);
 
     for (const auto &entry : pipe.entries) {
         l3_l4_type = summarize_l3_l4_types(pipe, &entry);
-        export_pipe_fwd(entry.fwd, fwd_arrow, port_str, pipe_str, l3_l4_type, out);
+        action_str = summarize_actions(entry.pkt_actions);
+        const auto &entry_fwd = normal_or_crypto_fwd(entry, is_secure);
+
+        if (!is_entry_redundant(pipe.pipe_ptr, entry_fwd)) {
+            export_pipe_fwd(entry_fwd, fwd_arrow, port_str, pipe_str, l3_l4_type, action_str, is_secure, out);
+            
+            set_exported(pipe.pipe_ptr, entry_fwd);
+        }
     }
     return out;
 }
@@ -299,26 +407,38 @@ std::ostream& MermaidExporter::export_pipe_fwd(
     const std::string &port_str,
     const std::string &pipe_str,
     const std::string &l3_l4_type,
+    const std::string &action_str,
+    bool is_secure,
     std::ostream &out)
 {
-    std::string l3_l4_label = l3_l4_type.size() ? surround(l3_l4_type, vbars) : "";
+    std::string label = l3_l4_type;
+    if (action_str.size()) {
+        if (label.size())
+            label += "/";
+        label += action_str;
+    }
+    if (label.size()) {
+        label = surround(label, vbars);
+    }
 
     switch (fwd.type) {
     case DOCA_FLOW_FWD_NONE:
         break;
-    case DOCA_FLOW_FWD_DROP:
+    case DOCA_FLOW_FWD_DROP: {
         out << tab << pipe_str
             << arrow_str << "drop"
             << std::endl;
         break;
+    }
     case DOCA_FLOW_FWD_PORT:
         out << tab << pipe_str
-            << arrow_str << stringify_port(fwd.port_id) << "." << egress
+            << arrow_str << label << stringify_port(fwd.port_id) << "." 
+            << (is_secure ? secure_egress : egress)
             << std::endl;
         break;
     case DOCA_FLOW_FWD_PIPE:
         out << tab << pipe_str
-            << arrow_str << l3_l4_label << port_str << "." << pipe_decls[fwd.next_pipe]
+            << arrow_str << label << port_str << "." << pipe_decls[fwd.next_pipe]
             << std::endl;
         break;
     case DOCA_FLOW_FWD_RSS:
@@ -361,6 +481,60 @@ std::ostream& MermaidExporter::export_ports(const PortActionMap& ports, std::ost
         export_port(port.second, out);
     }
     return out;
+}
+
+bool MermaidExporter::is_exported(uint16_t port_id, const Pipe *pipe) const
+{
+    PortPipePair pair = { port_id, pipe };
+    return port_pipe_pairs_exported.find(pair) != port_pipe_pairs_exported.end();
+}
+
+bool MermaidExporter::is_exported(const Pipe* from_pipe, const Pipe* to_pipe) const
+{
+    PipePair pair = { from_pipe, to_pipe };
+    return pipe_pairs_exported.find(pair) != pipe_pairs_exported.end();
+}
+
+void MermaidExporter::set_exported(uint16_t port_id, const Pipe* pipe)
+{
+    PortPipePair pair = { port_id, pipe };
+    port_pipe_pairs_exported.insert(pair);
+}
+
+void MermaidExporter::set_exported(const Pipe* from_pipe, const Pipe* to_pipe)
+{
+    PipePair pair = { from_pipe, to_pipe };
+    pipe_pairs_exported.insert(pair);
+}
+
+void MermaidExporter::set_exported(const Pipe* pipe, const Fwd& fwd)
+{
+    switch (fwd.type) {
+    case DOCA_FLOW_FWD_DROP:
+        drop_pipes_exported.insert(pipe);
+        break;
+    case DOCA_FLOW_FWD_PIPE:
+        pipe_pairs_exported.insert({pipe, fwd.next_pipe});
+        break;
+    case DOCA_FLOW_FWD_PORT:
+        port_pipe_pairs_exported.insert({fwd.port_id, pipe});
+    default:
+        break;
+    }
+}
+
+bool MermaidExporter::is_entry_redundant(const Pipe *pipe_ptr, const Fwd& fwd) const
+{
+    switch (fwd.type) {
+    case DOCA_FLOW_FWD_DROP:
+        return drop_pipes_exported.find(pipe_ptr) != drop_pipes_exported.end();
+    case DOCA_FLOW_FWD_PIPE:
+        return is_exported(pipe_ptr, fwd.next_pipe);
+    case DOCA_FLOW_FWD_PORT:
+        return is_exported(fwd.port_id, pipe_ptr);
+    default:
+        return false;
+    }
 }
 
 void flow_viz_export(void)

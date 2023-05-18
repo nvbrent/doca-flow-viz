@@ -10,17 +10,19 @@
 
 using Fwd = struct doca_flow_fwd;
 using Mon = struct doca_flow_monitor;
-
 using Port = struct doca_flow_port;
 using Pipe = struct doca_flow_pipe;
 using Entry = struct doca_flow_entry;
 using Match = struct doca_flow_match;
+using PktActions = struct doca_flow_actions;
+using CryptoCfg = struct doca_flow_resource_crypto_cfg;
 
 struct Actions;
 struct EntryActions;
 struct PipeActions;
 struct PortActions;
 using PortActionMap = std::map<const Port *const, PortActions>;
+using SharedCryptoFwd = std::map<uint32_t, CryptoCfg>;
 
 using export_function = std::function<void(const PortActionMap&, const char*)>;
 
@@ -31,6 +33,7 @@ struct Actions
     Mon mon = {};
     Match match = {};
     Match match_mask = {};
+    PktActions pkt_actions = {};
 };
 using ActionList = std::vector<Actions>;
 
@@ -62,4 +65,4 @@ struct PortActions
 
 // globals
 extern PortActionMap ports;
-
+extern SharedCryptoFwd shared_crypto_map;

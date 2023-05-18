@@ -89,3 +89,77 @@ std::string summarize_l3_l4_types(const PipeActions &pipe, const Actions *entry)
 
     return type_str;
 }
+
+bool is_mac_set(const uint8_t *mac) {
+    for (int i=0; i<DOCA_ETHER_ADDR_LEN; i++)
+        if (mac[i])
+            return true;
+    return false;
+}
+
+bool is_src_addr_set(const doca_flow_header_format &hdr) {
+    if (hdr.l3_type == DOCA_FLOW_L3_TYPE_IP4) {
+        return hdr.ip4.src_ip != 0;
+    }
+    for (int32_t i=0; i<4; i++) {
+        if (hdr.ip6.src_ip[i])
+            return true;
+    }
+    return false;
+}
+
+bool is_dst_addr_set(const doca_flow_header_format &hdr) {
+    if (hdr.l3_type == DOCA_FLOW_L3_TYPE_IP4) {
+        return hdr.ip4.dst_ip != 0;
+    }
+    for (int32_t i=0; i<4; i++) {
+        if (hdr.ip6.dst_ip[i])
+            return true;
+    }
+    return false;
+}
+
+char action_sep = ',';
+
+void add_action_str(std::string &actions, const std::string &token)
+{
+    if (actions.size())
+        actions += action_sep;
+    actions += token;
+}
+
+std::string summarize_actions(const PktActions &pkt_actions)
+{
+    // NOTE: Pipe- and Entry-level actions cannot be combined
+    // NOTE: The following are not supported:
+    // - meta.u32 and align
+    // - inner header eth/ipv4/ipv6
+    // - inner/outer L4 info (port num, tcp flags, etc.)
+    std::string actions;
+    if (pkt_actions.decap)
+        add_action_str(actions, "DECAP");
+    if (pkt_actions.pop)
+        add_action_str(actions, "POP");
+    if (pkt_actions.meta.pkt_meta || 
+            pkt_actions.meta.hash || 
+            pkt_actions.meta.port_meta ||
+            pkt_actions.meta.mark || 
+            pkt_actions.meta.nisp_syndrome || 
+            pkt_actions.meta.ipsec_syndrome)
+        add_action_str(actions, "+META");
+    if (is_mac_set(pkt_actions.outer.eth.dst_mac))
+        add_action_str(actions, "+DstMAC");
+    if (is_mac_set(pkt_actions.outer.eth.src_mac))
+        add_action_str(actions, "+SrcMAC");
+    if (is_dst_addr_set(pkt_actions.outer))
+        add_action_str(actions, "+DstIP");
+    if (is_src_addr_set(pkt_actions.outer))
+        add_action_str(actions, "+SrcIP");
+    if (pkt_actions.has_encap)
+        add_action_str(actions, "ENCAP");
+    if (pkt_actions.has_push)
+        add_action_str(actions, "PUSH");
+    if (pkt_actions.security.proto_type != DOCA_FLOW_CRYPTO_PROTOCOL_NONE)
+        add_action_str(actions, "CRYPTO");
+    return actions;
+}

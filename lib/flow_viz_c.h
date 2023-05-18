@@ -30,8 +30,14 @@ void flow_viz_entry_added(
     const struct doca_flow_pipe *pipe, 
     const struct doca_flow_match *match,
     const struct doca_flow_match *match_mask,
+    const struct doca_flow_actions *action,
     const struct doca_flow_fwd *fwd,
     const struct doca_flow_monitor *monitor);
+
+void flow_viz_resource_bound(
+    enum doca_flow_shared_resource_type type, 
+    uint32_t id,
+    struct doca_flow_shared_resource_cfg *cfg);
 
 #ifdef __cplusplus
 }
