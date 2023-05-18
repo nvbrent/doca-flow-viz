@@ -40,27 +40,33 @@ flowchart LR
     p0.egress{{p0.egress}}
     p1.ingress{{p1.ingress}}
     p1.egress{{p1.egress}}
+    p0.HAIRPIN("p0.HAIRPIN")
     p0.SAMPLE_PIPE("p0.SAMPLE_PIPE")
     p0.NEXT_PIPE("p0.NEXT_PIPE")
     p0.ROOT_PIPE("p0.ROOT_PIPE")
+    p1.HAIRPIN("p1.HAIRPIN")
     p1.SAMPLE_PIPE("p1.SAMPLE_PIPE")
     p1.NEXT_PIPE("p1.NEXT_PIPE")
     p1.ROOT_PIPE("p1.ROOT_PIPE")
     drop[[drop]]
 
     p0.ingress-->p0.ROOT_PIPE
+    p0.HAIRPIN-->p1.egress
+    p0.HAIRPIN-.->drop
     p0.SAMPLE_PIPE-->rss
-    p0.SAMPLE_PIPE-.->drop
-    p0.NEXT_PIPE-->p0.SAMPLE_PIPE
+    p0.SAMPLE_PIPE-.->p0.HAIRPIN
+    p0.NEXT_PIPE-->|IPV4.TCP|p0.SAMPLE_PIPE
     p0.NEXT_PIPE-.->drop
-    p0.ROOT_PIPE-->p0.NEXT_PIPE
+    p0.ROOT_PIPE-->|IPV4|p0.NEXT_PIPE
     p0.ROOT_PIPE-.->drop
     p1.ingress-->p1.ROOT_PIPE
+    p1.HAIRPIN-->p0.egress
+    p1.HAIRPIN-.->drop
     p1.SAMPLE_PIPE-->rss
-    p1.SAMPLE_PIPE-.->drop
-    p1.NEXT_PIPE-->p1.SAMPLE_PIPE
+    p1.SAMPLE_PIPE-.->p1.HAIRPIN
+    p1.NEXT_PIPE-->|IPV4.TCP|p1.SAMPLE_PIPE
     p1.NEXT_PIPE-.->drop
-    p1.ROOT_PIPE-->p1.NEXT_PIPE
+    p1.ROOT_PIPE-->|IPV4|p1.NEXT_PIPE
     p1.ROOT_PIPE-.->drop
 ```
 

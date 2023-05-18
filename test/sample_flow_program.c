@@ -103,11 +103,29 @@ void create_flows(
     for (uint16_t port_id=0; port_id<num_ports; port_id++)
     {
         doca_error_t res;
-        struct doca_flow_match match = {};
+        struct doca_flow_pipe *pipe = NULL;
+        struct 
+        doca_flow_match match = {};
         struct doca_flow_monitor mon = { .flags = DOCA_FLOW_MONITOR_COUNT };
+        struct doca_flow_fwd miss = { .type = DOCA_FLOW_FWD_DROP };
+
+        struct doca_flow_fwd hairpin = { .type = DOCA_FLOW_FWD_PORT, .port_id = port_id ^ 1 };
+        struct doca_flow_pipe_cfg hairpin_cfg = {
+            .attr = {
+                .name = "HAIRPIN",
+            },
+            .port = ports[port_id],
+            .match = &match,
+        };
+
+        res = doca_flow_pipe_create(&hairpin_cfg, &hairpin, &miss, &pipe);
+        if (res != DOCA_SUCCESS) {
+		    DOCA_LOG_ERR("Failed to create Pipe: %s", doca_get_error_string(res));
+        }
+
         uint16_t rss_queues[] = { 0 };
         struct doca_flow_fwd fwd = { .type = DOCA_FLOW_FWD_RSS, .num_of_queues=1, .rss_queues=rss_queues };
-        struct doca_flow_fwd miss = { .type = DOCA_FLOW_FWD_DROP };
+        struct doca_flow_fwd sample_miss = { .type = DOCA_FLOW_FWD_PIPE, .next_pipe = pipe };
         struct doca_flow_pipe_cfg cfg = {
             .attr = {
                 .name = "SAMPLE_PIPE",
@@ -116,9 +134,8 @@ void create_flows(
             .match = &match,
             .monitor = &mon,
         };
-        struct doca_flow_pipe *pipe = NULL;
 
-        res = doca_flow_pipe_create(&cfg, &fwd, &miss, &pipe);
+        res = doca_flow_pipe_create(&cfg, &fwd, &sample_miss, &pipe);
         if (res != DOCA_SUCCESS) {
 		    DOCA_LOG_ERR("Failed to create Pipe: %s", doca_get_error_string(res));
         }
@@ -128,13 +145,17 @@ void create_flows(
             res = doca_flow_pipe_add_entry(0, pipe, NULL, NULL, NULL, NULL, 0, NULL, &entry);
         }
 
+        struct doca_flow_match match_tcp = { 
+            .outer.l3_type = DOCA_FLOW_L3_TYPE_IP4,
+            .outer.l4_type_ext = DOCA_FLOW_L4_TYPE_EXT_TCP 
+        };
         struct doca_flow_fwd fwd_next = { .type = DOCA_FLOW_FWD_PIPE, .next_pipe = pipe };
         struct doca_flow_pipe_cfg cfg_next = {
             .attr = {
                 .name = "NEXT_PIPE",
             },
             .port = ports[port_id],
-            .match = &match,
+            .match = &match_tcp,
             .monitor = &mon,
         };
         res = doca_flow_pipe_create(&cfg_next, &fwd_next, &miss, &pipe);
@@ -147,13 +168,14 @@ void create_flows(
             res = doca_flow_pipe_add_entry(0, pipe, NULL, NULL, NULL, NULL, 0, NULL, &entry);
         }
 
+        struct doca_flow_match match_ipv4 = { .outer.l3_type = DOCA_FLOW_L3_TYPE_IP4 };
         struct doca_flow_pipe_cfg cfg_root = {
             .attr = {
                 .name = "ROOT_PIPE",
                 .is_root = true,
             },
             .port = ports[port_id],
-            .match = &match,
+            .match = &match_ipv4,
             .monitor = NULL, // "Counter action on root table is not supported in HW steering mode"
         };
         struct doca_flow_fwd fwd_root = { .type = DOCA_FLOW_FWD_PIPE, .next_pipe = pipe };
@@ -161,6 +183,7 @@ void create_flows(
         if (res != DOCA_SUCCESS) {
 		    DOCA_LOG_ERR("Failed to create Pipe: %s", doca_get_error_string(res));
         }
+
         struct doca_flow_pipe_entry *entry = NULL;
         res = doca_flow_pipe_add_entry(0, pipe, NULL, NULL, NULL, NULL, 0, NULL, &entry);
     }
