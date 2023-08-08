@@ -141,10 +141,8 @@ std::string summarize_actions(const PktActions &pkt_actions)
     if (pkt_actions.pop)
         add_action_str(actions, "POP");
     if (pkt_actions.meta.pkt_meta || 
-            pkt_actions.meta.hash || 
             pkt_actions.meta.port_meta ||
             pkt_actions.meta.mark || 
-            pkt_actions.meta.nisp_syndrome || 
             pkt_actions.meta.ipsec_syndrome)
         add_action_str(actions, "+META");
     if (is_mac_set(pkt_actions.outer.eth.dst_mac))
