@@ -2,7 +2,6 @@
 
 
 #include <dpdk_utils.h>
-#include <sig_db.h>
 #include <utils.h>
 
 #include <doca_argp.h>
@@ -45,7 +44,7 @@ port_init(uint16_t port_id)
 	struct doca_flow_port * port;
     doca_error_t res = doca_flow_port_start(&port_cfg, &port);
 	if (port == NULL) {
-		DOCA_LOG_ERR("failed to initialize doca flow port: %s", doca_get_error_string(res));
+		DOCA_LOG_ERR("failed to initialize doca flow port: %s", doca_error_get_descr(res));
 		return NULL;
 	}
 	return port;
@@ -64,7 +63,7 @@ flow_init(
 	};
 	doca_error_t res = doca_flow_init(&arp_sc_flow_cfg);
     if (res != DOCA_SUCCESS) {
-		DOCA_LOG_ERR("failed to init doca: %s", doca_get_error_string(res));
+		DOCA_LOG_ERR("failed to init doca: %s", doca_error_get_descr(res));
 		return -1;
 	}
 	DOCA_LOG_DBG("DOCA flow init done");
@@ -106,7 +105,7 @@ void create_flows(
         struct doca_flow_pipe *pipe = NULL;
         struct 
         doca_flow_match match = {};
-        struct doca_flow_monitor mon = { .flags = DOCA_FLOW_MONITOR_COUNT };
+        struct doca_flow_monitor mon = { .counter_type = DOCA_FLOW_RESOURCE_TYPE_NON_SHARED };
         struct doca_flow_fwd miss = { .type = DOCA_FLOW_FWD_DROP };
 
         struct doca_flow_fwd hairpin = { .type = DOCA_FLOW_FWD_PORT, .port_id = port_id ^ 1 };
@@ -120,7 +119,7 @@ void create_flows(
 
         res = doca_flow_pipe_create(&hairpin_cfg, &hairpin, &miss, &pipe);
         if (res != DOCA_SUCCESS) {
-		    DOCA_LOG_ERR("Failed to create Pipe: %s", doca_get_error_string(res));
+		    DOCA_LOG_ERR("Failed to create Pipe: %s", doca_error_get_descr(res));
         }
 
         uint16_t rss_queues[] = { 0 };
@@ -137,7 +136,7 @@ void create_flows(
 
         res = doca_flow_pipe_create(&cfg, &fwd, &sample_miss, &pipe);
         if (res != DOCA_SUCCESS) {
-		    DOCA_LOG_ERR("Failed to create Pipe: %s", doca_get_error_string(res));
+		    DOCA_LOG_ERR("Failed to create Pipe: %s", doca_error_get_descr(res));
         }
 
         for (int j=0; j<5; j++) {
@@ -146,8 +145,8 @@ void create_flows(
         }
 
         struct doca_flow_match match_tcp = { 
-            .outer.l3_type = DOCA_FLOW_L3_TYPE_IP4,
-            .outer.l4_type_ext = DOCA_FLOW_L4_TYPE_EXT_TCP 
+            .parser_meta.outer_l3_type = DOCA_FLOW_L3_META_IPV4,
+            .parser_meta.outer_l4_type = DOCA_FLOW_L4_META_TCP 
         };
         struct doca_flow_fwd fwd_next = { .type = DOCA_FLOW_FWD_PIPE, .next_pipe = pipe };
         struct doca_flow_pipe_cfg cfg_next = {
@@ -160,7 +159,7 @@ void create_flows(
         };
         res = doca_flow_pipe_create(&cfg_next, &fwd_next, &miss, &pipe);
         if (res != DOCA_SUCCESS) {
-		    DOCA_LOG_ERR("Failed to create Pipe: %s", doca_get_error_string(res));
+		    DOCA_LOG_ERR("Failed to create Pipe: %s", doca_error_get_descr(res));
         }
 
         for (int j=0; j<2; j++) {
@@ -168,7 +167,7 @@ void create_flows(
             res = doca_flow_pipe_add_entry(0, pipe, NULL, NULL, NULL, NULL, 0, NULL, &entry);
         }
 
-        struct doca_flow_match match_ipv4 = { .outer.l3_type = DOCA_FLOW_L3_TYPE_IP4 };
+        struct doca_flow_match match_ipv4 = { .parser_meta.outer_l3_type = DOCA_FLOW_L3_META_IPV4 };
         struct doca_flow_pipe_cfg cfg_root = {
             .attr = {
                 .name = "ROOT_PIPE",
@@ -181,7 +180,7 @@ void create_flows(
         struct doca_flow_fwd fwd_root = { .type = DOCA_FLOW_FWD_PIPE, .next_pipe = pipe };
         res = doca_flow_pipe_create(&cfg_root, &fwd_root, &miss, &pipe);
         if (res != DOCA_SUCCESS) {
-		    DOCA_LOG_ERR("Failed to create Pipe: %s", doca_get_error_string(res));
+		    DOCA_LOG_ERR("Failed to create Pipe: %s", doca_error_get_descr(res));
         }
 
         struct doca_flow_pipe_entry *entry = NULL;
@@ -191,8 +190,11 @@ void create_flows(
 
 int main(int argc, char *argv[])
 {
-	struct doca_logger_backend *stdout_logger = NULL;
-	(void)doca_log_create_file_backend(stdout, &stdout_logger);
+	doca_error_t result = doca_log_backend_create_standard();
+    if (result != DOCA_SUCCESS) {
+        fprintf(stderr, "Failed to open doca log backend; giving up\n");
+        return -1;
+    }
 
 	struct application_dpdk_config dpdk_config = {
 		.port_config.nb_ports = 2,
@@ -203,7 +205,6 @@ int main(int argc, char *argv[])
 	/* Parse cmdline/json arguments */
 	doca_argp_init("SAMPLE", &dpdk_config);
 	doca_argp_set_dpdk_program(dpdk_init);
-	//sample_register_argp_params();
 	doca_argp_start(argc, argv);
 
 	install_signal_handler();

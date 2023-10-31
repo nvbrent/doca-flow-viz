@@ -89,14 +89,16 @@ doca_flow_pipe_control_add_entry(uint16_t pipe_queue,
 			const struct doca_flow_match *match,
 			const struct doca_flow_match *match_mask,
 			const struct doca_flow_actions *actions,
+			const struct doca_flow_actions *actions_mask,
 			const struct doca_flow_action_descs *action_descs,
 			const struct doca_flow_monitor *monitor,
 			const struct doca_flow_fwd *fwd,
+			void *usr_ctx,
 			struct doca_flow_pipe_entry **entry)
 {
     doca_error_t res = (*p_doca_flow_pipe_control_add_entry)(
         pipe_queue, priority, pipe, match, match_mask, 
-		actions, action_descs, monitor, fwd, entry);
+		actions, actions_mask, action_descs, monitor, fwd, usr_ctx, entry);
 	if (res == DOCA_SUCCESS) {
 		flow_viz_entry_added(pipe, match, match_mask, actions, fwd, monitor);
 	}

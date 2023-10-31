@@ -90,8 +90,13 @@ void flow_viz_entry_added(
         auto &pipe_actions = pipe_actions_iter->second;
 
         bool has_fwd = fwd && fwd->type;
-        bool has_mon = mon && mon->flags;
-        bool has_crypto = pipe_actions.pipe_actions.pkt_actions.security.proto_type != DOCA_FLOW_CRYPTO_PROTOCOL_NONE;
+        bool has_mon = mon && (
+            mon->meter_type != DOCA_FLOW_RESOURCE_TYPE_NONE ||
+            mon->counter_type != DOCA_FLOW_RESOURCE_TYPE_NONE ||
+            mon->shared_mirror_id != 0 ||
+            mon->aging_enabled
+        );
+        bool has_crypto = pipe_actions.pipe_actions.pkt_actions.crypto.action_type != DOCA_FLOW_CRYPTO_ACTION_NONE;
         if (!has_fwd && !has_mon && !has_crypto)
             return; // nothing to contribute
 
@@ -349,19 +354,14 @@ std::ostream& MermaidExporter::export_port(const PortActions &port, std::ostream
 const Fwd& normal_or_crypto_fwd(const Actions &actions, bool &is_secure)
 {
     is_secure = false;
-    if (actions.pkt_actions.security.proto_type == DOCA_FLOW_CRYPTO_PROTOCOL_NONE &&
-        actions.pkt_actions.security.crypto_id == 0) {
+    if (actions.pkt_actions.crypto.proto_type == DOCA_FLOW_CRYPTO_PROTOCOL_NONE &&
+        actions.pkt_actions.crypto.crypto_id == 0) {
         return actions.fwd;
     }
 
-    auto crypto_cfg_iter = shared_crypto_map.find(
-        actions.pkt_actions.security.crypto_id);
+    is_secure = shared_crypto_map.find(
+        actions.pkt_actions.crypto.crypto_id) != shared_crypto_map.end();
 
-    if (crypto_cfg_iter != shared_crypto_map.end()) {
-        const auto &crypto_cfg = crypto_cfg_iter->second;
-        is_secure = true;
-        return crypto_cfg.fwd;
-    }
     return actions.fwd;
 }
 
@@ -379,10 +379,13 @@ std::ostream& MermaidExporter::export_pipe(const PipeActions &pipe, std::ostream
     const auto &normal_fwd = normal_or_crypto_fwd(pipe.pipe_actions, is_secure);
     const auto &miss_fwd   = pipe.pipe_actions.fwd_miss;
     
+#if 0 // TODO: DOCA 2.5
     auto action_str = is_secure ?
         summarize_crypto(shared_crypto_map[pipe.pipe_actions.pkt_actions.security.crypto_id]) :
         summarize_actions(pipe.pipe_actions.pkt_actions);
-
+#else
+    auto action_str = summarize_actions(pipe.pipe_actions.pkt_actions);
+#endif
     export_pipe_fwd(normal_fwd, fwd_arrow,  port_str, pipe_str, l3_l4_type, action_str, is_secure, out);
     export_pipe_fwd(miss_fwd,   miss_arrow, port_str, pipe_str, l3_l4_type, "",         is_secure, out);
 
@@ -391,9 +394,13 @@ std::ostream& MermaidExporter::export_pipe(const PipeActions &pipe, std::ostream
     for (const auto &entry : pipe.entries) {
         l3_l4_type = summarize_l3_l4_types(pipe, &entry);
         const auto &entry_fwd = normal_or_crypto_fwd(entry, is_secure);
+#if 0 // TODO: DOCA 2.5
         auto action_str = is_secure ?
             summarize_crypto(shared_crypto_map[entry.pkt_actions.security.crypto_id]) :
             summarize_actions(entry.pkt_actions);
+#else
+        auto action_str = summarize_actions(entry.pkt_actions);
+#endif
         
         if (!is_entry_redundant(pipe.pipe_ptr, entry_fwd)) {
             export_pipe_fwd(entry_fwd, fwd_arrow, port_str, pipe_str, l3_l4_type, action_str, is_secure, out);

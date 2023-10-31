@@ -2,7 +2,6 @@ test_exe = executable('sample_flow_program',
 	[
         'sample_flow_program.c',
         doca_common_dir_path + '/dpdk_utils.c',
-        doca_common_dir_path + '/offload_rules.c',
         doca_common_dir_path + '/utils.c',
     ],
 	dependencies : app_dependencies,
