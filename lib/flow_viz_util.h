@@ -26,4 +26,4 @@ std::string summarize_l3_l4_types(const PipeActions &pipe, const Actions *entry)
 
 std::string summarize_actions(const PktActions &pkt_actions);
 
-std::string summarize_crypto(const CryptoCfg &pkt_actions);
+std::string summarize_crypto(const PktActions &pkt_actions);

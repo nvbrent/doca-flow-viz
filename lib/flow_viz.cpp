@@ -379,13 +379,7 @@ std::ostream& MermaidExporter::export_pipe(const PipeActions &pipe, std::ostream
     const auto &normal_fwd = normal_or_crypto_fwd(pipe.pipe_actions, is_secure);
     const auto &miss_fwd   = pipe.pipe_actions.fwd_miss;
     
-#if 0 // TODO: DOCA 2.5
-    auto action_str = is_secure ?
-        summarize_crypto(shared_crypto_map[pipe.pipe_actions.pkt_actions.security.crypto_id]) :
-        summarize_actions(pipe.pipe_actions.pkt_actions);
-#else
     auto action_str = summarize_actions(pipe.pipe_actions.pkt_actions);
-#endif
     export_pipe_fwd(normal_fwd, fwd_arrow,  port_str, pipe_str, l3_l4_type, action_str, is_secure, out);
     export_pipe_fwd(miss_fwd,   miss_arrow, port_str, pipe_str, l3_l4_type, "",         is_secure, out);
 
@@ -394,13 +388,7 @@ std::ostream& MermaidExporter::export_pipe(const PipeActions &pipe, std::ostream
     for (const auto &entry : pipe.entries) {
         l3_l4_type = summarize_l3_l4_types(pipe, &entry);
         const auto &entry_fwd = normal_or_crypto_fwd(entry, is_secure);
-#if 0 // TODO: DOCA 2.5
-        auto action_str = is_secure ?
-            summarize_crypto(shared_crypto_map[entry.pkt_actions.security.crypto_id]) :
-            summarize_actions(entry.pkt_actions);
-#else
         auto action_str = summarize_actions(entry.pkt_actions);
-#endif
         
         if (!is_entry_redundant(pipe.pipe_ptr, entry_fwd)) {
             export_pipe_fwd(entry_fwd, fwd_arrow, port_str, pipe_str, l3_l4_type, action_str, is_secure, out);
@@ -442,6 +430,7 @@ std::ostream& MermaidExporter::export_pipe_fwd(
     case DOCA_FLOW_FWD_PORT:
         out << tab << pipe_str
             << arrow_str << label << stringify_port(fwd.port_id) << "." 
+            // TODO: DOCA 2.5: Should we just use pipe.attr.domain here?
             << (is_secure ? secure_egress : egress)
             << std::endl;
         break;

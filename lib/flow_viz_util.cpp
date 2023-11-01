@@ -152,6 +152,16 @@ void add_action_str(std::string &actions, const std::string &token)
     actions += token;
 }
 
+bool is_meta_populated(const doca_flow_meta &meta)
+{
+    if (meta.pkt_meta || meta.mark)
+        return true;
+    for (uint32_t i=0; i<DOCA_FLOW_META_SCRATCH_PAD_MAX; i++)
+        if (meta.u32[i])
+            return true;
+    return false;
+}
+
 std::string summarize_actions(const PktActions &pkt_actions)
 {
     // NOTE: Pipe- and Entry-level actions cannot be combined
@@ -164,11 +174,7 @@ std::string summarize_actions(const PktActions &pkt_actions)
         add_action_str(actions, "DECAP");
     if (pkt_actions.pop)
         add_action_str(actions, "POP");
-    if (pkt_actions.meta.pkt_meta || 
-            // TODO: DOCA 2.5 pkt_actions.parser_meta.hash || 
-            pkt_actions.parser_meta.port_meta ||
-            pkt_actions.meta.mark || 
-            pkt_actions.parser_meta.ipsec_syndrome)
+    if (is_meta_populated(pkt_actions.meta))
         add_action_str(actions, "+META");
     if (is_mac_set(pkt_actions.outer.eth.dst_mac))
         add_action_str(actions, "+DstMAC");
@@ -182,32 +188,25 @@ std::string summarize_actions(const PktActions &pkt_actions)
         add_action_str(actions, "ENCAP");
     if (pkt_actions.has_push)
         add_action_str(actions, "PUSH");
-#if 0 // TODO: DOCA 2.5
-    if (pkt_actions.security.proto_type != DOCA_FLOW_CRYPTO_PROTOCOL_NONE)
-        add_action_str(actions, "CRYPTO");
-#endif
+    if (pkt_actions.crypto.action_type != DOCA_FLOW_CRYPTO_ACTION_NONE)
+        add_action_str(actions, summarize_crypto(pkt_actions));
     return actions;
 }
 
-std::string summarize_crypto(const CryptoCfg &pkt_actions)
+std::string summarize_crypto(const PktActions &pkt_actions)
 {
-    std::string actions;
-#if 0 // TODO: DOCA 2.5
-    if (pkt_actions.proto_type == DOCA_FLOW_CRYPTO_PROTOCOL_NONE ||
-        pkt_actions.action_type == DOCA_FLOW_CRYPTO_ACTION_NONE) {
-        return actions;
+    std::string actions = pkt_actions.crypto.action_type == DOCA_FLOW_CRYPTO_ACTION_ENCRYPT
+        ? "ENCR" : "DECR";
+    if (pkt_actions.has_crypto_encap) {
+        if (pkt_actions.crypto_encap.action_type == DOCA_FLOW_CRYPTO_REFORMAT_ENCAP)
+            actions += "/ENCAP";
+        else if (pkt_actions.crypto_encap.action_type == DOCA_FLOW_CRYPTO_REFORMAT_DECAP)
+            actions += "/DECAP";
+        if (pkt_actions.crypto_encap.net_type == DOCA_FLOW_CRYPTO_HEADER_ESP_TUNNEL)
+            actions += "/TUNNEL";
+        else
+            actions += "/XPORT";
     }
-    // actions += pkt_actions.proto_type == DOCA_FLOW_CRYPTO_PROTOCOL_NISP ? "NISP/" : "ESP/";
-    actions += pkt_actions.action_type == DOCA_FLOW_CRYPTO_ACTION_ENCRYPT ? "ENCR" : "DECR";
-    if (pkt_actions.reformat_type == DOCA_FLOW_CRYPTO_REFORMAT_ENCAP)
-        actions += "/ENCAP";
-    else if (pkt_actions.reformat_type == DOCA_FLOW_CRYPTO_REFORMAT_DECAP)
-        actions += "/DECAP";
-    if (pkt_actions.net_type == DOCA_FLOW_CRYPTO_NET_TUNNEL)
-        actions += "/TUNNEL";
-    else if (pkt_actions.net_type == DOCA_FLOW_CRYPTO_NET_TRANSPORT)
-        actions += "/XPORT";
-#endif
     return actions;
 }
 
