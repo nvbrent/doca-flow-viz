@@ -2,7 +2,7 @@
 
 The `flow-viz` library is a wrapper for `DOCA Flow`. It intercepts calls to create/destroy Pipes, and builds an internal representation of their forwarding actions to build a logical graph of their connections. This graph is then exported in Mermaid format.
 
-Prerequisites: DOCA 2.0.2
+Prerequisites: DOCA 2.5.0
 
 ## Building `flow-viz`:
 ```
