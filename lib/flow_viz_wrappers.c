@@ -1,5 +1,5 @@
 #include <doca_flow.h>
-#include <wrapper_decls.h>
+#include <flow_viz_wrapper_decls.h>
 #include <flow_viz_c.h>
 
 // Wrapper functions from doca_flow.h

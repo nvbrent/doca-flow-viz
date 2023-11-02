@@ -16,7 +16,7 @@
 #include <dlfcn.h>
 
 #define COUNTER_SPY_DECL_NO_EXTERN
-#include <wrapper_decls.h>
+#include <flow_viz_wrapper_decls.h>
 #include <flow_viz_c.h>
 
 #define DOCA_FLOW_SO "libdoca_flow.so"
