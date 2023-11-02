@@ -2,7 +2,7 @@
 
 #include <doca_flow.h>
 #include <string>
-#include <flow_viz.h>
+#include <flow_viz_types.h>
 
 enum doca_flow_l3_meta
 accumulate_l3_type(enum doca_flow_l3_meta state, enum doca_flow_l3_meta input);

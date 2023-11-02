@@ -1,68 +1,60 @@
 #pragma once
 
-#include <inttypes.h>
-#include <functional>
-#include <map>
-#include <string>
-#include <vector>
-
 #include <doca_flow.h>
+#include <flow_viz_types.h>
 
-using Fwd = struct doca_flow_fwd;
-using Mon = struct doca_flow_monitor;
-using Port = struct doca_flow_port;
-using Pipe = struct doca_flow_pipe;
-using Entry = struct doca_flow_entry;
-using Match = struct doca_flow_match;
-using PktActions = struct doca_flow_actions;
-using CryptoCfg = struct doca_flow_resource_crypto_cfg;
+class FlowVizExporter;
 
-struct Actions;
-struct EntryActions;
-struct PipeActions;
-struct PortActions;
-using PortActionMap = std::map<const Port *const, PortActions>;
-using SharedCryptoFwd = std::map<uint32_t, CryptoCfg>;
-
-using export_function = std::function<void(const PortActionMap&, const char*)>;
-
-struct Actions
+class FlowViz
 {
-    Fwd fwd = {};
-    Fwd fwd_miss = {};
-    Mon mon = {};
-    Match match = {};
-    Match match_mask = {};
-    PktActions pkt_actions = {};
-};
-using ActionList = std::vector<Actions>;
+public:
+    FlowViz();
+    ~FlowViz();
 
-struct EntryActions
-{
-    const Entry *entry_ptr = {};
-    struct doca_flow_match match = {};
-    Actions actions;
-};
+    // Exports all collected flow pipes
+    void export_flows(FlowVizExporter *exporter);
 
-struct PipeActions
-{
-    const Pipe *pipe_ptr = {};
-    const Port *port_ptr = {};
-    struct doca_flow_pipe_attr attr = {};
-    std::string attr_name;
-    size_t instance_num;
-    Actions pipe_actions;
-    ActionList entries;
-};
+    // doca_flow_init called
+    void flow_init(void);
 
-struct PortActions
-{
-    const Port *port_ptr = {};
-    uint16_t port_id;
-    std::map<std::string, size_t> pipe_name_count;
-    std::map<const struct doca_flow_pipe*, PipeActions> pipe_actions;
-};
+    // doca_flow_port_start called
+    void port_started(
+        uint16_t port_id,
+        const struct doca_flow_port *port);
 
-// globals
-extern PortActionMap ports;
-extern SharedCryptoFwd shared_crypto_map;
+    // doca_flow_port_stop called
+    void port_stopped(
+        const struct doca_flow_port *port);
+
+    // doca_flow_port_flush called
+    void port_flushed(
+        const struct doca_flow_port *port);
+
+    // doca_flow_pipe_create called
+    void pipe_created(
+        const struct doca_flow_pipe_cfg *cfg, 
+        const struct doca_flow_fwd *fwd, 
+        const struct doca_flow_fwd *fwd_miss, 
+        const struct doca_flow_pipe *pipe);
+
+    // one of the family of doca_flow_xxx_pipe_entry_add called
+    void entry_added(
+        const struct doca_flow_pipe *pipe, 
+        const struct doca_flow_match *match,
+        const struct doca_flow_match *match_mask,
+        const struct doca_flow_actions *action,
+        const struct doca_flow_fwd *fwd,
+        const struct doca_flow_monitor *monitor);
+
+    // doca_flow_resource_bind called
+    void resource_bound(
+        enum doca_flow_shared_resource_type type, 
+        uint32_t id,
+        struct doca_flow_shared_resource_cfg *cfg);
+
+private:
+    bool export_done { false };
+
+    PortActionMap ports;
+    SharedCryptoFwd shared_crypto_map;
+};

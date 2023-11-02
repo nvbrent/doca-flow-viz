@@ -1,14 +1,24 @@
 #include <flow_viz_mermaid.h>
 #include <flow_viz_util.h>
 
-std::string MermaidExporter::stringify_port(const PortActions &port) const
+std::ostream& MermaidExporter::start_file(std::ostream &out)
 {
-    return stringify_port(port.port_id);
+    return out << "```mermaid" << std::endl;
+}
+
+std::ostream& MermaidExporter::end_file(std::ostream &out)
+{
+    return out << "```" << std::endl;
 }
 
 std::string MermaidExporter::stringify_port(uint16_t port_id) const
 {
     return "p" + std::to_string(port_id);
+}
+
+std::string MermaidExporter::stringify_port(const PortActions &port) const
+{
+    return stringify_port(port.port_id);
 }
 
 std::string MermaidExporter::stringify_pipe(const PipeActions& pipe) const
@@ -23,13 +33,15 @@ std::string MermaidExporter::stringify_pipe_instance(
     return stringify_pipe(pipe) + surround(std::to_string(pipe.instance_num), braces);
 }
 
-
 std::string MermaidExporter::stringify_rss(const Fwd &rss_action) const
 {
     return "rss"; // TODO: include queue indices, etc.
 }
 
-std::ostream& MermaidExporter::declare_port(const PortActions &port, std::ostream &out)
+std::ostream& MermaidExporter::declare_port(
+    const PortActions &port, 
+    bool include_secure_ingress_egress,
+    std::ostream &out)
 {
     if (port_decls.find(port.port_ptr) != port_decls.end())
         return out;
@@ -37,7 +49,7 @@ std::ostream& MermaidExporter::declare_port(const PortActions &port, std::ostrea
     const auto &port_str = port_decls[port.port_ptr] = stringify_port(port);
 
     std::vector<std::string> directions = { ingress, egress };
-    if (!shared_crypto_map.empty()) {
+    if (include_secure_ingress_egress) {
         directions.push_back(secure_ingress);
         directions.push_back(secure_egress);
     }
@@ -131,14 +143,8 @@ std::ostream& MermaidExporter::export_port(const PortActions &port, std::ostream
 
 const Fwd& normal_or_crypto_fwd(const Actions &actions, bool &is_secure)
 {
-    is_secure = false;
-    if (actions.pkt_actions.crypto.proto_type == DOCA_FLOW_CRYPTO_PROTOCOL_NONE &&
-        actions.pkt_actions.crypto.crypto_id == 0) {
-        return actions.fwd;
-    }
-
-    is_secure = shared_crypto_map.find(
-        actions.pkt_actions.crypto.crypto_id) != shared_crypto_map.end();
+    is_secure = actions.pkt_actions.crypto.crypto_id != 0 ||
+        actions.pkt_actions.crypto.proto_type != DOCA_FLOW_CRYPTO_PROTOCOL_NONE;
 
     return actions.fwd;
 }
@@ -239,11 +245,14 @@ std::ostream& MermaidExporter::export_pipe_entry(
     return out;
 }
 
-std::ostream& MermaidExporter::export_ports(const PortActionMap& ports, std::ostream &out)
+std::ostream& MermaidExporter::export_ports(
+        const PortActionMap& ports, 
+        const SharedCryptoFwd &shared_crypto_map,
+        std::ostream &out)
 {
     out << "flowchart LR" << std::endl;
     for (const auto &port : ports) {
-        declare_port(port.second, out);
+        declare_port(port.second, !shared_crypto_map.empty(), out);
     }
     for (const auto &port : ports) {
         for (const auto &pipe : port.second.pipe_actions) {

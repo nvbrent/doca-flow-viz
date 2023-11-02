@@ -1,25 +1,34 @@
-#ifndef __FLOW_VIZ_MERMAID_H__
-#define __FLOW_VIZ_MERMAID_H__
+#pragma once
 
 #include <inttypes.h>
 #include <ostream>
 #include <string>
 #include <set>
 
-#include <flow_viz.h>
+#include <flow_viz_types.h>
+#include <flow_viz_exporter.h>
 
-class MermaidExporter
+class MermaidExporter : public FlowVizExporter
 {
 public:
-    virtual ~MermaidExporter() = default;
+    MermaidExporter() = default;
+    ~MermaidExporter() override = default;
 
-    std::ostream& export_ports(const PortActionMap& ports, std::ostream &out);
+    std::ostream& start_file(std::ostream &out) override;
+
+    std::ostream& export_ports(
+        const PortActionMap& ports, 
+        const SharedCryptoFwd &shared_crypto_map,
+        std::ostream &out) override;
+
+    std::ostream& end_file(std::ostream &out) override;
 
 protected:
     using Braces = std::pair<std::string, std::string>;
     
     std::ostream& declare_port(
         const PortActions &port, 
+        bool include_secure_ingress_egress,
         std::ostream &out);
     std::ostream& declare_pipe(
         const PortActions &port,
@@ -99,5 +108,3 @@ protected:
         return braces.first + s + braces.second;
     }
 };
-
-#endif

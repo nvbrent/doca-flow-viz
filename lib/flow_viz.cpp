@@ -7,14 +7,21 @@
 #include <thread>
 
 #include <doca_flow.h>
-#include <flow_viz_c.h>
+
 #include <flow_viz.h>
-#include <flow_viz_mermaid.h>
+#include <flow_viz_types.h>
+#include <flow_viz_exporter.h>
 
-PortActionMap ports;
-SharedCryptoFwd shared_crypto_map;
+FlowViz::FlowViz() = default;
 
-void flow_viz_port_started(
+FlowViz::~FlowViz() = default;
+
+void FlowViz::flow_init(void)
+{
+    // nothing to do
+}
+
+void FlowViz::port_started(
     uint16_t port_id,
     const struct doca_flow_port * port)
 {
@@ -23,17 +30,17 @@ void flow_viz_port_started(
     port_actions.port_ptr = port;
 }
 
-void flow_viz_port_stopped(
+void FlowViz::port_stopped(
     const struct doca_flow_port *port)
 {
 }
 
-void flow_viz_port_flushed(
+void FlowViz::port_flushed(
     const struct doca_flow_port *port)
 {
 }
 
-void flow_viz_pipe_created(
+void FlowViz::pipe_created(
     const struct doca_flow_pipe_cfg *cfg, 
     const struct doca_flow_fwd *fwd, 
     const struct doca_flow_fwd *fwd_miss, 
@@ -71,7 +78,7 @@ void flow_viz_pipe_created(
         pipe_actions.pipe_actions.pkt_actions = *cfg->actions[0];
 }
 
-void flow_viz_entry_added(
+void FlowViz::entry_added(
     const struct doca_flow_pipe *pipe, 
     const struct doca_flow_match *match,
     const struct doca_flow_match *match_mask,
@@ -115,7 +122,7 @@ void flow_viz_entry_added(
     }
 }
 
-void flow_viz_resource_bound(
+void FlowViz::resource_bound(
     enum doca_flow_shared_resource_type type, 
     uint32_t id,
     struct doca_flow_shared_resource_cfg *cfg)
@@ -126,20 +133,15 @@ void flow_viz_resource_bound(
     }
 }
 
-void flow_viz_init(void)
+void FlowViz::export_flows(FlowVizExporter *exporter)
 {
-    // nothing to do
-}
-
-void flow_viz_export(void)
-{
-    static bool export_done = false;
     if (!export_done) {
-        MermaidExporter exporter;
         std::ofstream out("flows.md");
-        out << "```mermaid" << std::endl;
-        exporter.export_ports(ports, out);
-        out << "```" << std::endl;
+
+        exporter->start_file(out);
+        exporter->export_ports(ports, shared_crypto_map, out);
+        exporter->end_file(out);
+
         export_done = true;
     }
 }
