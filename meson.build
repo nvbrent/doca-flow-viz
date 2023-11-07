@@ -14,7 +14,7 @@ project('doca-flow-viz', 'C', 'CPP',
 	version: '0.0.1',
 	default_options: [
 		'buildtype=debug',
-		'cpp_std=c++17']
+		'cpp_std=c++14']
 )
 
 add_project_arguments('-D DOCA_ALLOW_EXPERIMENTAL_API', language: ['c','cpp'])

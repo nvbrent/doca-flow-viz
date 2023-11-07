@@ -127,7 +127,7 @@ void create_flows(
         struct doca_flow_fwd sample_miss = { .type = DOCA_FLOW_FWD_PIPE, .next_pipe = pipe };
         struct doca_flow_pipe_cfg cfg = {
             .attr = {
-                .name = "SAMPLE_PIPE",
+                .name = "THIRD_PIPE",
             },
             .port = ports[port_id],
             .match = &match,
@@ -151,7 +151,7 @@ void create_flows(
         struct doca_flow_fwd fwd_next = { .type = DOCA_FLOW_FWD_PIPE, .next_pipe = pipe };
         struct doca_flow_pipe_cfg cfg_next = {
             .attr = {
-                .name = "NEXT_PIPE",
+                .name = "SECOND_PIPE",
             },
             .port = ports[port_id],
             .match = &match_tcp,

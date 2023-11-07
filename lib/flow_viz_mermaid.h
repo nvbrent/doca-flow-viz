@@ -18,7 +18,6 @@ public:
 
     std::ostream& export_ports(
         const PortActionMap& ports, 
-        const SharedCryptoFwd &shared_crypto_map,
         std::ostream &out) override;
 
     std::ostream& end_file(std::ostream &out) override;
@@ -48,13 +47,13 @@ protected:
         const PipeActions &pipe, 
         std::ostream &out);
     std::ostream& export_pipe_fwd(
+        enum doca_flow_pipe_domain domain,
         const Fwd &fwd, 
         const std::string &arrow_str,
         const std::string &port_str,
         const std::string &pipe_str,
         const std::string &l3_l4_type,
         const std::string &action_str,
-        bool is_secure,
         std::ostream &out);
     std::ostream& export_pipe_entry(
         const PipeActions &pipe,
@@ -66,6 +65,8 @@ protected:
     std::string stringify_pipe(const PipeActions &pipe) const;
     std::string stringify_pipe_instance(const PipeActions &pipe, const Braces &braces) const;
     std::string stringify_rss(const Fwd &rss_action) const;
+
+    bool are_secure_domains_used(const PortActionMap& ports) const;
 
     // used to eliminate duplicate arrows
     using PortPipePair = std::pair<uint16_t, const Pipe*>;

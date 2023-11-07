@@ -56,5 +56,4 @@ private:
     bool export_done { false };
 
     PortActionMap ports;
-    SharedCryptoFwd shared_crypto_map;
 };

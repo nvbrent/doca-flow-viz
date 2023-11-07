@@ -17,7 +17,6 @@ public:
 
     virtual std::ostream& export_ports(
         const PortActionMap& ports, 
-        const SharedCryptoFwd &shared_crypto_map,
         std::ostream &out) = 0;
 
     virtual std::ostream& end_file(std::ostream &out) = 0;

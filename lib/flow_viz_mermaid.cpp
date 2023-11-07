@@ -141,14 +141,6 @@ std::ostream& MermaidExporter::export_port(const PortActions &port, std::ostream
     return out;
 }
 
-const Fwd& normal_or_crypto_fwd(const Actions &actions, bool &is_secure)
-{
-    is_secure = actions.pkt_actions.crypto.crypto_id != 0 ||
-        actions.pkt_actions.crypto.proto_type != DOCA_FLOW_CRYPTO_PROTOCOL_NONE;
-
-    return actions.fwd;
-}
-
 // Exports the fwd and fwd_miss actions of the pipe,
 // as well as each of its pipe entries.
 // Care is taken to ensure the same arrow never gets 
@@ -159,23 +151,22 @@ std::ostream& MermaidExporter::export_pipe(const PipeActions &pipe, std::ostream
     std::string pipe_str = port_str + "." + pipe_decls[pipe.pipe_ptr];
     auto l3_l4_type = summarize_l3_l4_types(pipe, nullptr);
 
-    bool is_secure = false;
-    const auto &normal_fwd = normal_or_crypto_fwd(pipe.pipe_actions, is_secure);
+    const auto &normal_fwd = pipe.pipe_actions.fwd;
     const auto &miss_fwd   = pipe.pipe_actions.fwd_miss;
     
     auto action_str = summarize_actions(pipe.pipe_actions.pkt_actions);
-    export_pipe_fwd(normal_fwd, fwd_arrow,  port_str, pipe_str, l3_l4_type, action_str, is_secure, out);
-    export_pipe_fwd(miss_fwd,   miss_arrow, port_str, pipe_str, l3_l4_type, "",         is_secure, out);
+    export_pipe_fwd(pipe.attr.domain, normal_fwd, fwd_arrow,  port_str, pipe_str, l3_l4_type, action_str, out);
+    export_pipe_fwd(pipe.attr.domain, miss_fwd,   miss_arrow, port_str, pipe_str, l3_l4_type, "",         out);
 
     set_exported(pipe.pipe_ptr, normal_fwd);
 
     for (const auto &entry : pipe.entries) {
         l3_l4_type = summarize_l3_l4_types(pipe, &entry);
-        const auto &entry_fwd = normal_or_crypto_fwd(entry, is_secure);
+        const auto &entry_fwd = entry.fwd;
         auto action_str = summarize_actions(entry.pkt_actions);
         
         if (!is_entry_redundant(pipe.pipe_ptr, entry_fwd)) {
-            export_pipe_fwd(entry_fwd, fwd_arrow, port_str, pipe_str, l3_l4_type, action_str, is_secure, out);
+            export_pipe_fwd(pipe.attr.domain, entry_fwd, fwd_arrow, port_str, pipe_str, l3_l4_type, action_str, out);
             
             set_exported(pipe.pipe_ptr, entry_fwd);
         }
@@ -184,13 +175,13 @@ std::ostream& MermaidExporter::export_pipe(const PipeActions &pipe, std::ostream
 }
 
 std::ostream& MermaidExporter::export_pipe_fwd(
+    enum doca_flow_pipe_domain domain,
     const Fwd &fwd, 
     const std::string &arrow_str,
     const std::string &port_str,
     const std::string &pipe_str,
     const std::string &l3_l4_type,
     const std::string &action_str,
-    bool is_secure,
     std::ostream &out)
 {
     std::string label = l3_l4_type;
@@ -214,8 +205,7 @@ std::ostream& MermaidExporter::export_pipe_fwd(
     case DOCA_FLOW_FWD_PORT:
         out << tab << pipe_str
             << arrow_str << label << stringify_port(fwd.port_id) << "." 
-            // TODO: DOCA 2.5: Should we just use pipe.attr.domain here?
-            << (is_secure ? secure_egress : egress)
+            << (domain==DOCA_FLOW_PIPE_DOMAIN_SECURE_EGRESS ? secure_egress : egress)
             << std::endl;
         break;
     case DOCA_FLOW_FWD_PIPE:
@@ -245,14 +235,30 @@ std::ostream& MermaidExporter::export_pipe_entry(
     return out;
 }
 
+bool MermaidExporter::are_secure_domains_used(const PortActionMap& ports) const
+{
+    for (const auto &port : ports) {
+        for (const auto &pipe : port.second.pipe_actions) {
+            auto pipe_domain = pipe.second.attr.domain;
+            if (pipe_domain == DOCA_FLOW_PIPE_DOMAIN_SECURE_EGRESS ||
+                pipe_domain == DOCA_FLOW_PIPE_DOMAIN_SECURE_INGRESS)
+            {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 std::ostream& MermaidExporter::export_ports(
         const PortActionMap& ports, 
-        const SharedCryptoFwd &shared_crypto_map,
         std::ostream &out)
 {
+    bool include_secure_ingress_egress = are_secure_domains_used(ports);
+
     out << "flowchart LR" << std::endl;
     for (const auto &port : ports) {
-        declare_port(port.second, !shared_crypto_map.empty(), out);
+        declare_port(port.second, include_secure_ingress_egress, out);
     }
     for (const auto &port : ports) {
         for (const auto &pipe : port.second.pipe_actions) {

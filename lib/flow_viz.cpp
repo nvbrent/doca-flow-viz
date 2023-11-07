@@ -52,7 +52,7 @@ void FlowViz::pipe_created(
     auto port_iter = ports.find(cfg->port);
     if (port_iter == ports.end())
         return;
-
+    
     auto &port_actions = port_iter->second;
     auto &pipe_actions = port_actions.pipe_actions[pipe];
     pipe_actions.pipe_ptr = pipe;
@@ -60,6 +60,7 @@ void FlowViz::pipe_created(
     pipe_actions.attr_name = cfg->attr.name;
     pipe_actions.attr = cfg->attr; // copy
 
+    // Ensure pipes with the same name on different ports are distinguishable
     auto &counter = port_actions.pipe_name_count[pipe_actions.attr_name];
     pipe_actions.instance_num = counter++;
 
@@ -78,6 +79,8 @@ void FlowViz::pipe_created(
         pipe_actions.pipe_actions.pkt_actions = *cfg->actions[0];
 }
 
+static const struct doca_flow_actions empty_actions = {};
+
 void FlowViz::entry_added(
     const struct doca_flow_pipe *pipe, 
     const struct doca_flow_match *match,
@@ -91,7 +94,7 @@ void FlowViz::entry_added(
 
         auto pipe_actions_iter = port_actions.pipe_actions.find(pipe);
         if (pipe_actions_iter == port_actions.pipe_actions.end()) {
-            continue; // pipe not found
+            continue; // pipe not found on this port; next
         }
 
         auto &pipe_actions = pipe_actions_iter->second;
@@ -103,21 +106,27 @@ void FlowViz::entry_added(
             mon->shared_mirror_id != 0 ||
             mon->aging_enabled
         );
-        bool has_crypto = pipe_actions.pipe_actions.pkt_actions.crypto.action_type != DOCA_FLOW_CRYPTO_ACTION_NONE;
-        if (!has_fwd && !has_mon && !has_crypto)
+
+        bool has_actions = action && 
+            memcmp(action, &empty_actions, sizeof(empty_actions));
+
+        if (!has_fwd && !has_mon && !has_actions)
             return; // nothing to contribute
 
-        auto &entry_actions = pipe_actions.entries.emplace_back();
-        if (fwd)
+        pipe_actions.entries.emplace_back();
+        auto &entry_actions = pipe_actions.entries.back();
+
+        if (has_fwd)
             entry_actions.fwd = *fwd;
-        if (mon)
+        if (has_mon)
             entry_actions.mon = *mon;
         if (match)
             entry_actions.match = *match;
         if (match_mask)
             entry_actions.match_mask = *match_mask;
-        if (action)
+        if (has_actions)
             entry_actions.pkt_actions = *action;
+
         break;
     }
 }
@@ -127,10 +136,6 @@ void FlowViz::resource_bound(
     uint32_t id,
     struct doca_flow_shared_resource_cfg *cfg)
 {
-    if (type == DOCA_FLOW_SHARED_RESOURCE_CRYPTO) {
-        const auto &crypto_cfg = cfg->crypto_cfg;
-        shared_crypto_map[id] = crypto_cfg;
-    }
 }
 
 void FlowViz::export_flows(FlowVizExporter *exporter)
@@ -139,7 +144,7 @@ void FlowViz::export_flows(FlowVizExporter *exporter)
         std::ofstream out("flows.md");
 
         exporter->start_file(out);
-        exporter->export_ports(ports, shared_crypto_map, out);
+        exporter->export_ports(ports, out);
         exporter->end_file(out);
 
         export_done = true;

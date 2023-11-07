@@ -3,6 +3,7 @@
 #include <inttypes.h>
 #include <functional>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
