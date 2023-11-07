@@ -23,11 +23,14 @@ dependency_libdpdk = dependency('libdpdk', required : false)
 if not dependency_libdpdk.found()
 	error('Please set PKG_CONFIG_PATH to DPDK packages path, for further instructions please refer to the DOCA Reference Applications guide')
 endif
-app_dependencies = [dependency_libdpdk]
-app_dependencies += dependency('threads', required : true)
-app_dependencies += dependency('doca', required : true)
 
-doca_common_dir_path = '/opt/mellanox/doca/applications/common/src'
+dependency_doca = dependency('doca', required : true)
+
+app_dependencies = [dependency_libdpdk, dependency_doca]
+app_dependencies += dependency('threads', required : true)
+
+doca_common_dir_path = dependency_doca.get_variable('prefix', 
+	default_value: '/opt/mellanox/doca') + '/applications/common/src'
 
 subdir('lib')
 subdir('test')
